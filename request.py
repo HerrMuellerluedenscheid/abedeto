@@ -5,6 +5,7 @@ from pyrocko.fdsn import ws
 from pyrocko import model
 from pyrocko import cake
 from pyrocko import orthodrome as ortho
+from pyrocko.guts import Object, String, Float, List
 import logging
 from util import create_directory
 
@@ -12,8 +13,7 @@ pjoin = os.path.join
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('data-request')
 
-
-class CakeTiming():
+class CakeTiming(Object):
     '''Calculates and caches phase arrivals.
     :param fallback_time: returned, when no phase arrival was found for the
                         given depth-distance-phase-selection-combination
@@ -21,26 +21,30 @@ class CakeTiming():
     E.g.:
     definition = 'first(p,P)-20'
     CakeTiming(definition)'''
+    phase_selection = String.T()
+    fallback_time = Float.T(optional=True)
     def __init__(self, phase_selection, fallback_time=None):
         self.arrivals = defaultdict(dict)
-        self.fallback = fallback_time
+        self.fallback_time = fallback_time
         self.which = None
-        if '+' in phase_selection:
-            phase_selection, self.offset = phase_selection.split('+')
+        self.phase_selection = phase_selection
+        _phase_selection = phase_selection
+        if '+' in _phase_selection:
+            _phase_selection, self.offset = _phase_selection.split('+')
             self.offset = float(self.offset)
-        elif '-' in phase_selection:
-            phase_selection, self.offset = phase_selection.split('-')
+        elif '-' in _phase_selection:
+            _phase_selection, self.offset = _phase_selection.split('-')
             self.offset = float(self.offset)
             self.offset = -self.offset
 
-        if 'first' in phase_selection:
+        if 'first' in _phase_selection:
             self.which = 'first'
-        if 'last' in phase_selection:
+        if 'last' in _phase_selection:
             self.which = 'last'
         if self.which:
-            phase_selection = self.strip(phase_selection)
+            _phase_selection = self.strip(_phase_selection)
 
-        self.phases = phase_selection.split('|')
+        self.phases = _phase_selection.split('|')
 
 
     def t(self, mod, z_dist):
@@ -54,8 +58,8 @@ class CakeTiming():
         phases = [cake.PhaseDef(pid) for pid in self.phases]
         arrivals = mod.arrivals(distances=[dist*cake.m2d], phases=phases, zstart=z)
         if arrivals==[]:
-            logger.warn('none of defined phases at d=%s, z=%s. (return fallback)'  % (dist, z))
-            want = self.fallback
+            logger.warn('none of defined phases at d=%s, z=%s. (return fallback time)'  % (dist, z))
+            want = self.fallback_time
         else:
             want = self.phase_selector(arrivals)
             want = want.t + self.offset
@@ -114,16 +118,17 @@ class DataProvider():
                        #'GERES': ()}
 
     def download(self, event, directory='array_data', timing=None, length=None,
-                 want='all', force=False):
+                 want='all', force=False, prefix=False, dump_config=False):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
         if all([timing, length]) == None:
             raise Exception('Define one of "timing" and "length"')
-
+        if prefix:
+            directory = pjoin(prefix, directory)
         if want=='all':
             wanted_ids = self.arrays.keys()
         elif isinstance(want, str):
-            wanted_ids = want
+            wanted_ids = [want]
         else:
             wanted_ids = want
 
@@ -163,9 +168,18 @@ class DataProvider():
                     f.write(d.read())
                     f.close()
                 model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
+                if dump_config and timing:
+                    t = Timings(list(timing))
+                    t.validate()
+                    t.dump(filename=pjoin(sub_directory, 'request.conf'))
             except ws.EmptyResult as e:
                 logging.error('%s on %s' %(e, array_id))
 
+
+class Timings(Object):
+    timings = List.T(CakeTiming.T())
+    def __init__(self, timings):
+        self.timings = timings
 
 
 
@@ -178,6 +192,6 @@ if __name__=="__main__":
     length = 1000.
     e = list(model.Event.load_catalog(args.events))[0]
     provider = DataProvider()
-    tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.)
+    tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.001)
     tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=1000.)
-    provider.download(e, timing=(tmin, tmax))
+    provider.download(e, timing=(tmin, tmax), dump_config=True, want='YKA', force=True)
