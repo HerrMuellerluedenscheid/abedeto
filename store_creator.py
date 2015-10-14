@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as num
+import math
 from pyrocko import crust2x2, orthodrome as ortho
 from pyrocko.fomosto import qseis
 from pyrocko.gf.store import Store
@@ -39,8 +40,8 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
                          distance_delta=0.,
                          sample_rate=sample_rate)
 
-    config.distance_min = distance-5*km
-    config.distance_max = distance+5*km
+    config.distance_min = math.floor(distance-5*km)
+    config.distance_max = math.ceil(distance+5*km)
     config.distance_delta = 10*km
     configid = ''
     for item in zip([station, event],['earthmodel_1d', 'earthmodel_receiver_1d']):
