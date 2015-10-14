@@ -86,9 +86,12 @@ def create_directory(directory, force):
 
 
 class DataProvider():
-    def __init__(self):
-        self.arrays = {'YKA': ('CN', 'YKA*', '*', 'SHZ'),
-                       'ESK': ('GB', 'ESK', '', '*HZ')}
+    def __init__(self, channels='SHZ'):
+        self.arrays = {'YKA': ('CN', 'YKA*', '*', channels),
+                       'ESK': [('IM', 'EKB?', '*', channels),
+                               ('IM', 'EKR?', '*', channels)]}
+
+                       #'GERES': ()}
 
     def download(self, event, directory='array_data', timing=None, length=None,
                  want='all', force=False):
@@ -110,12 +113,15 @@ class DataProvider():
             logger.info("fetching %s" % array_id)
             create_directory(sub_directory, force)
             codes = self.arrays[array_id]
-            selection = [codes+tuple((event.time, event.time+1000.))]
+            if not isinstance(codes, list):
+                codes = [codes]
+            selection = [c + tuple((event.time, event.time+1000.)) for c in codes]
+            logger.debug('selection: ', selection)
             try:
                 st = ws.station(site='iris', selection=selection)
             except ws.EmptyResult as e:
                 logging.error('%s on %s' %(e, array_id))
-            fn = pjoin(sub_directory, 'stations.%s.pf' % array_id)
+            fn = pjoin(sub_directory, 'stations.pf')
             stations = st.get_pyrocko_stations()
             min_dist = min(
                 [ortho.distance_accurate50m(s, event) for s in stations])
@@ -130,12 +136,12 @@ class DataProvider():
             elif timing:
                 tstart = timing[0].t(mod, (event.depth, min_dist))
                 tend = timing[1].t(mod, (event.depth, max_dist))
-            selection = [codes+tuple((event.time + tstart, event.time + tend))]
+            selection = [c + tuple((event.time + tstart, event.time + tend)) for c in codes]
             try:
                 d = ws.dataselect(site='iris', selection=selection)
             except ws.EmptyResult as e:
                 logging.error('%s on %s' %(e, array_id))
-            fn = pjoin(sub_directory, '%s.mseed' % array_id)
+            fn = pjoin(sub_directory, '%s.mseed' % ('.'.join([c[1].replace('?', '').replace('*','') for c in codes])))
             with open(fn, 'w') as f:
                 f.write(d.read())
                 f.close()
