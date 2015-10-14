@@ -7,7 +7,7 @@ from pyrocko.fomosto import qseis
 from pyrocko.gf.store import Store
 from pyrocko.gf.meta import Timing, ConfigTypeA, TPDef
 from pyrocko import cake
-from request import create_directory
+from util import create_directory
 import copy
 import tempfile
 import logging
