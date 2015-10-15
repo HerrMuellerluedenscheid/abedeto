@@ -21,24 +21,41 @@ def one_or_error(items):
     else:
         return e[0]
 
-
+def one_2_list(items):
+    if not isinstance(items, list):
+        return [items]
 
 
 def init(args):
-    create_directory(args.name, args.force)
-    create_directory(pjoin(args.name, 'meta'), args.force)
+    ev = list(model.Event.load_catalog(args.events))
+    if len(ev) == 1:
+        if args.name:
+            name = args.name
+        else:
+            name = ev[0].name
+        create_directory(name, args.force)
+        create_directory(name, args.force)
+    else:
+        if args.name:
+            logger.warn("Cannot use defined name if list of events. Will"
+                            " use event names instead")
+        for i_e, e in enumerate(ev):
+            if e.name:
+                name = e.name
+            else:
+                logger.warn("event name is empty. Skipping...")
+                continue
 
-    length = 1000.
-    e = list(model.Event.load_catalog(args.events))
-    e = one_or_error(e)
-    model.Event.dump_catalog([e], pjoin(args.name, 'event.pf'))
-    provider = DataProvider()
-    tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.)
-    tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=1000.)
-    provider.download(e, timing=(tmin, tmax), prefix=args.name, dump_config=True)
-    logger.info('.'*30)
-    logger.info('Go to %s' % args.name)
-    logger.info('modify get_parameters.pf')
+            create_directory(name, args.force)
+            create_directory(name, args.force)
+
+            model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
+            provider = DataProvider()
+            tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=100.)
+            tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=600.)
+            provider.download(e, timing=(tmin, tmax), prefix=name, dump_config=True)
+            logger.info('.'*30)
+            logger.info('Prepared project %s for you' % name)
 
 def getagain(args):
     raise Exception('Not implemented')
