@@ -5,13 +5,15 @@ from pyrocko.fdsn import ws
 from pyrocko import model
 from pyrocko import cake
 from pyrocko import orthodrome as ortho
-from pyrocko.guts import Object, String, Float, List
+from pyrocko.gf.meta import Timing as PyrockoTiming
+from pyrocko.guts import Object, String, Float, List, Dict
 import logging
 from util import create_directory
 
 pjoin = os.path.join
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('data-request')
+
 
 class CakeTiming(Object):
     '''Calculates and caches phase arrivals.
@@ -46,25 +48,32 @@ class CakeTiming(Object):
 
         self.phases = _phase_selection.split('|')
 
+    def return_time(self, ray):
+        if ray == None:
+            return self.fallback_time
+        else:
+            return ray.t + self.offset
 
-    def t(self, mod, z_dist):
+    def t(self, mod, z_dist, get_ray=False):
         ''':param phase_selection: phase names speparated by vertical bars
         :param z_dist: tuple with (depth, distance)
         '''
         z, dist = z_dist
         if (dist, z) in self.arrivals.keys():
-            return self.arrivals[(dist, z)]
+            return self.return_time(self.arrivals[(dist, z)])
 
         phases = [cake.PhaseDef(pid) for pid in self.phases]
         arrivals = mod.arrivals(distances=[dist*cake.m2d], phases=phases, zstart=z)
         if arrivals==[]:
             logger.warn('none of defined phases at d=%s, z=%s. (return fallback time)'  % (dist, z))
-            want = self.fallback_time
+            want = None
         else:
             want = self.phase_selector(arrivals)
-            want = want.t + self.offset
         self.arrivals[(dist, z)] = want
-        return want
+        if get_ray:
+            return want
+        else:
+            return self.return_time(want)
 
     def phase_selector(self, _list):
         if self.which=='first':
@@ -78,11 +87,22 @@ class CakeTiming(Object):
         ps = ps.lstrip('(')
         return ps
 
+    def pyrocko_timing(self):
+        return Timing()
+
+class Timings(Object):
+    timings = List.T(CakeTiming.T())
+    def __init__(self, timings):
+        self.timings = timings
 
 
-class DataProvider():
-    def __init__(self, channels='SHZ'):
-
+class DataProvider(Object):
+    use = List.T(String.T())
+    timings = Dict.T(String.T(), Timings.T())
+    #receiver_crusts = Dict.T(String.T(), String.T())
+    def __init__(self, channels='SHZ', use=None, timings=None):
+        self.use = use or []
+        self.timings = timings or {}
         self.arrays = {'YKA': ('CN', 'YKA*', '', channels),
                        'ESK': [('IM', 'EKB?', '', channels),
                                ('IM', 'EKR*', '', channels)],
@@ -114,17 +134,17 @@ class DataProvider():
                         'BermudaIA': ('IM', 'I51H?', '', channels),
                         'FairbanksIA': ('IM', 'I53H?', '', channels)}
 
-
-                       #'GERES': ()}
-
     def download(self, event, directory='array_data', timing=None, length=None,
                  want='all', force=False, prefix=False, dump_config=False):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
+        use = []
+        ts = {}
+        #receiver_crusts = {}
         if all([timing, length]) == None:
             raise Exception('Define one of "timing" and "length"')
-        if prefix:
-            directory = pjoin(prefix, directory)
+        prefix = prefix or ''
+        directory = pjoin(prefix, directory)
         if want=='all':
             wanted_ids = self.arrays.keys()
         elif isinstance(want, str):
@@ -134,6 +154,8 @@ class DataProvider():
 
         create_directory(directory, force)
         for array_id in wanted_ids:
+            if array_id not in wanted_ids:
+                continue
             sub_directory = pjoin(directory, array_id)
             logger.info("fetching %s" % array_id)
             codes = self.arrays[array_id]
@@ -170,16 +192,17 @@ class DataProvider():
                 model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
                 if dump_config and timing:
                     t = Timings(list(timing))
+                    ts[array_id] = t
                     t.validate()
                     t.dump(filename=pjoin(sub_directory, 'request.conf'))
+                if array_id not in use:
+                    use.append(array_id)
             except ws.EmptyResult as e:
                 logging.error('%s on %s' %(e, array_id))
-
-
-class Timings(Object):
-    timings = List.T(CakeTiming.T())
-    def __init__(self, timings):
-        self.timings = timings
+        if dump_config:
+            self.timings = ts
+            self.use = use
+            self.dump(filename=pjoin(prefix, 'request.yaml'))
 
 
 
