@@ -2,8 +2,10 @@ import os
 from request import DataProvider
 from beam_stack import BeamForming
 from pyrocko import model
+from pyrocko import io
 from util import create_directory
 from request import DataProvider, CakeTiming
+import store_creator
 import logging
 
 pjoin = os.path.join
@@ -11,16 +13,24 @@ pjoin = os.path.join
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('run')
 
+
+def one_or_error(items):
+    e = list(items)
+    if len(e)>1:
+        raise Exception('more than one item in list. Can only handle one')
+    else:
+        return e[0]
+
+
+
+
 def init(args):
     create_directory(args.name, args.force)
     create_directory(pjoin(args.name, 'meta'), args.force)
 
     length = 1000.
     e = list(model.Event.load_catalog(args.events))
-    if len(e)>1:
-        raise Exception('more than one event in catalog. Not implemented')
-    else:
-        e = e[0]
+    e = one_or_error(e)
     model.Event.dump_catalog([e], pjoin(args.name, 'event.pf'))
     provider = DataProvider()
     tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.)
@@ -34,29 +44,37 @@ def getagain(args):
     raise Exception('Not implemented')
 
 def beam(args):
-    provider = DataProvider.load(filename='available_arrays.yaml')
-    for array_id in provider.available_arrays:
-        traces = io.load_traces(pjoin('array_data', array_id, 'traces.mseed'))
-        traces = [tr for trs in traces for tr in trs]
-        stations = model.load_stations(pjoin('array_data', 'stations.pf'))
-        BeamForming(statoins, event, traces, normalize=args.normalize)
-    raise Exception('Not implemented')
+    """Uses tmin timing object, without the offset to calculate the beam"""
+    event = list(model.Event.load_catalog('event.pf'))
+    assert len(event)==1
+    event = event[0]
+    provider = DataProvider.load(filename='request.yaml')
+    for array_id in provider.use:
+        directory = pjoin('array_data', array_id)
+        traces = io.load(pjoin(directory, 'traces.mseed'))
+        stations = model.load_stations(pjoin(directory, 'stations.pf'))
+        bf = BeamForming(stations, traces, normalize=args.normalize)
+        bf.process(event=event,
+                   timing=provider.timings[array_id].timings[0],
+                   fn_dump_center=pjoin(directory, 'array_center.pf'),
+                   fn_beam=pjoin(directory, 'beam.mseed'),
+                   station=array_id)
 
 def propose_stores(args):
-    e = list(model.Event.load_catalog(pjoin(args.name, 'event.pf')))
-    if len(e)>1:
-        raise Exception('more than one event in catalog. Not implemented')
-    else:
-        e = e[0]
-    for s in stations:
-        propose_store(s, e, superdir=args.store_dir,
-                      source_depth_min=args.sdmin,
-                      source_depth_max=args.sdmax,
-                      source_depth_delta=args.sddelta,
-                      sample_rate=args.samplerate,
-                      force_overwrite=args.force_overwrite)
-    create_directory(pjoin(args.name, 'meta'), args.force)
-    raise Exception('Not implemented')
+    e = list(model.Event.load_catalog('event.pf'))
+    e = one_or_error(e)
+
+    provider = DataProvider.load(filename='request.yaml')
+    for array_id in provider.use:
+        directory = pjoin('array_data', array_id)
+        station = model.load_stations(pjoin(directory, 'array_center.pf'))
+        station = one_or_error(station)
+        store_creator.propose_store(station, e, superdir=args.store_dir,
+                                    source_depth_min=args.sdmin,
+                                    source_depth_max=args.sdmax,
+                                    source_depth_delta=args.sddelta,
+                                    sample_rate=args.sample_rate,
+                                    force_overwrite=args.force_overwrite)
 
 def process(args):
     raise Exception('Not implemented')
@@ -88,6 +106,16 @@ if __name__=='__main__':
                                 default=False,
                                 action='store_true')
 
+    group_beam = parser.add_argument_group('Beam Forming')
+    group_beam.add_argument('--beam',
+                                help='run beamforming',
+                                action='store_true')
+    group_beam.add_argument('--normalize',
+                                help='normlize by standard deviation of trace',
+                                action='store_true',
+                            default=True)
+
+
     group_getagain = parser.add_argument_group('Create stores')
     group_getagain.add_argument('--storify',
                                 help='',
@@ -118,22 +146,17 @@ if __name__=='__main__':
                                 help='overwrite existent stores',
                                 action='store_false')
 
-    group_beam = parser.add_argument_group('Beam Forming')
-    group_beam.add_argument('--beam',
-                                help='run beamforming',
-                                action='store_true')
-    group_beam.add_argument('--normalize',
-                                help='normlize by standard deviation of trace',
-                                action='store_true',
-                            default=True)
-
     args = parser.parse_args()
 
     if args.init:
         init(args)
 
+    if args.storify:
+        propose_stores(args)
+
     if args.beam:
         beam(args)
+
     # init
     # -download data, store download infos in subdir
 
