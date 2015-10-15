@@ -19,7 +19,6 @@ logger = logging.getLogger("propose-store")
 def propose_store(station, event, superdir, source_depth_min=0., source_depth_max=15.,
                   source_depth_delta=1., sample_rate=10., force_overwrite=False):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
-    
     :param event: Event instance
     :param station: Station instance
     :param superdir: where to create the store (default, current directory)
@@ -38,7 +37,8 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
                          distance_min=0.,
                          distance_max=0.,
                          distance_delta=0.,
-                         sample_rate=sample_rate)
+                         sample_rate=sample_rate,
+                         ncomponents=10)
 
     config.distance_min = math.floor(distance-5*km)
     config.distance_max = math.ceil(distance+5*km)
@@ -49,7 +49,7 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
         if model_id=='earthmodel_1d':
             mod = cake.load_model()
             mod = mod.replaced_crust((location.lat, location.lon))
-            configid += '%s_' % crust2x2.get_profile(location.lat, location.lon)._ident
+            configid += '%s_%s_' % (station.station, crust2x2.get_profile(location.lat, location.lon)._ident)
         else:
             mod = cake.LayeredModel.from_scanlines(
                 cake.from_crust2x2_profile(
@@ -68,33 +68,30 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
     arrivals = config.earthmodel_1d.arrivals(phases=cake.PhaseDef('P'),
                                              distances=[distance*cake.m2d],
                                              zstart=mean_z)
-    slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
+    if len(arrivals)==0:
+        slow = 0.1
+    else:
+        slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
 
     config.modelling_code_id=modelling_code_id
     config.tabulated_phases=[
         TPDef(
             id='begin',
-            definition='p,P,p\\,P\\,Pv_(cmb)p'),
+            definition='P,P\\,Pv_(cmb)p'),
         TPDef(
             id='end',
             definition='2.5'),
         TPDef(
             id='P',
-            definition='!P'),
-        TPDef(
-            id='S',
-            definition='!S'),
-        TPDef(
-            id='p',
-            definition='!p'),
-        TPDef(
-            id='s',
-            definition='!s')]
+            definition='!P')]
 
     qs = qseis.QSeisConfig()
-    qs.time_region = (Timing('P-50'), Timing('P+60'))
-    qs.cut = (Timing('P-50'), Timing('P+60'))
-    qs.slowness_window = (0., 0., slow+slow*0.2, slow+slow*0.25)
+    qs.qseis_version = config.modelling_code_id.split('.')[1]
+    qs.time_region = (Timing('P-50'), Timing('P+100'))
+    qs.cut = (Timing('P-50'), Timing('P+100'))
+    qs.slowness_window = (0., 0., slow+slow*0.5, slow+slow*0.8)
+    qs.filter_shallow_paths = 1
+    qs.filter_shallow_paths_depth = round(distance/100000.)
     qs.validate()
     config.validate()
     Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
