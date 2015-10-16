@@ -28,7 +28,7 @@ def to_cartesian(items, reflatlon):
         dz = elevation - depth
         lat = item.lat/180.*num.pi
         z = r_earth+dz*num.sin(lat)
-        res[item] = (x, y, z)
+        res[item.nsl()[:2]] = (x, y, z)
     return res
 
 
@@ -86,15 +86,18 @@ class BeamForming(Object):
             dist = ortho.distance_accurate50m(event, self.station_c)
             ray = timing.t(mod, (event.depth, dist), get_ray=True)
             if ray is None:
-                logger.error('None of defined phases available at beam station:\n %s' % self.station_c)
+                logger.error('None of defined phases available at beam station:'
+                             '\n %s' % self.station_c)
                 return 
             else:
                 self.bazi = ortho.azimuth(self.station_c, event)
-                self.slow = ray.p/(cake.r2d*cake.d2m/cake.km)
-                print 'CHECK SLOWNESS!: ', self.slow, dist
+                self.slow = ray.p/(cake.r2d*cake.d2m)
         else:
             self.bazi = bazi
             self.slow = slow
+        
+        logger.info('stacking %s with slowness %1.4f s/km at back azimut %1.1f '
+                    'degrees' %('.'.join(c_station_id), self.slow/cake.km, self.bazi))
 
         lat0 = num.array([lat_c]*len(stations))
         lon0 = num.array([lon_c]*len(stations))
@@ -157,7 +160,7 @@ class BeamForming(Object):
             t_shift = d*self.slow
             tr.shift(t_shift)
             #stat = viewer.get_station(tr.nslc_id[:2])
-            self.t_shifts[tr.nslc_id] = t_shift
+            self.t_shifts[tr.nslc_id[:2]] = t_shift
             if self.normalize_std:
                 tr.ydata = tr.ydata/tr.ydata.std()
 
@@ -174,7 +177,6 @@ class BeamForming(Object):
         if self.post_normalize:
             for ch, tr in self.stacked.items():
                 tr.set_ydata(tr.get_ydata()/num_stacked[ch])
-
         #for ch, tr in self.stacked.items():
         #    if num_stacked[ch]>1:
         #        self.add_trace(tr)
@@ -203,28 +205,29 @@ class BeamForming(Object):
         z = num.mean(elevations-depths)
         return (lats.mean()*180/num.pi, lons.mean()*180/num.pi, z)
 
-    def plot(self):
+    def plot(self, fn='beam_shifts.png'):
         stations = self.stations
+        stations.append(self.station_c)
         res = to_cartesian(stations, self.station_c)
-        center_xyz = res[self.station_c]
+        center_xyz = res[self.station_c.nsl()[:2]]
         x = num.zeros(len(res))
         y = num.zeros(len(res))
         z = num.zeros(len(res))
         sizes = num.zeros(len(res))
         stat_labels = []
         i = 0
-        for s, xyz in res.items():
+        for nsl, xyz in res.items():
             x[i] = xyz[0]
             y[i] = xyz[1]
             z[i] = xyz[2]
 
             try:
-                sizes[i] = self.t_shifts[s]
-                stat_labels.append('%s' % (s.nsl_string()))
+                sizes[i] = self.t_shifts[nsl[:2]]
+                stat_labels.append('%s' % ('.'.join(nsl)))
             except AttributeError:
                 self.fail('Run the snuffling first')
             except KeyError:
-                stat_labels.append('%s' % (s.nsl_string()))
+                stat_labels.append('%s' % ('.'.join(nsl)))
                 continue
             finally:
                 i += 1
@@ -247,6 +250,7 @@ class BeamForming(Object):
         ax = fig.add_axes([0.10, 0.1, 0.70, 0.7])
         ax.set_aspect('equal')
         cmap = cm.get_cmap('bwr')
+        print sizes
         ax.scatter(x, y, c=sizes, s=200, cmap=cmap,
                    vmax=num.max(sizes), vmin=-num.max(sizes))
         for i, lab in enumerate(stat_labels):
@@ -266,7 +270,8 @@ class BeamForming(Object):
         ax.set_xlabel("E-W [km]")
         ColorbarBase(cax, cmap=cmap,
                      norm=Normalize(vmin=sizes.min(), vmax=sizes.max()))
-        plt.show()
+        logger.debug('finished plotting %s' % fn)
+        fig.savefig(fn)
 
     def save(self, traces, fn='beam.pf'):
         io.save(traces, fn)
