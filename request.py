@@ -103,7 +103,7 @@ class DataProvider(Object):
     def __init__(self, channels='SHZ', use=None, timings=None):
         self.use = use or []
         self.timings = timings or {}
-        self.arrays = {'YKA': ('CN', 'YKA*', '', channels),
+        self.iris_arrays = {'YKA': ('CN', 'YKA*', '', channels),
                        'ESK': [('IM', 'EKB?', '', channels),
                                ('IM', 'EKR*', '', channels)],
                        'ILAR': ('IM', 'IL*', '', channels),
@@ -134,39 +134,54 @@ class DataProvider(Object):
                         'BermudaIA': ('IM', 'I51H?', '', channels),
                         'FairbanksIA': ('IM', 'I53H?', '', channels)}
 
+        self.geofon_arrays = {'GERES':[('GR', 'GEA?', '', channels),
+                                     ('GR', 'GEB?', '', channels),
+                                     ('GR', 'GEC?', '', channels),
+                                     ('GR', 'GED?', '', channels)]}
+    
     def download(self, event, directory='array_data', timing=None, length=None,
-                 want='all', force=False, prefix=False, dump_config=False):
+                 want='all', force=False, prefix=False, dump_config=False, site='iris'):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
         use = []
         ts = {}
-        #receiver_crusts = {}
         if all([timing, length]) == None:
             raise Exception('Define one of "timing" and "length"')
         prefix = prefix or ''
         directory = pjoin(prefix, directory)
+        if site=='iris':
+            array_data_provder = self.iris_arrays
+        elif site=='geofon':
+            array_data_provder = self.geofon_arrays
+        else:
+            raise Exception('unknown site %s' % site)
         if want=='all':
-            wanted_ids = self.arrays.keys()
+            wanted_ids = array_data_provder.keys()
         elif isinstance(want, str):
+            if not want in array_data_provder.keys():
+                raise Exception('unknown array id for this site %s' % want)
             wanted_ids = [want]
         else:
+            for iwant in want:
+                if not iwant in array_data_provder.keys():
+                    logger.warn('unknown array id for this site %s' % iwant)
             wanted_ids = want
-
         create_directory(directory, force)
         for array_id in wanted_ids:
             if array_id not in wanted_ids:
                 continue
             sub_directory = pjoin(directory, array_id)
             logger.info("fetching %s" % array_id)
-            codes = self.arrays[array_id]
+            codes = array_data_provder[array_id]
             if not isinstance(codes, list):
                 codes = [codes]
             selection = [c + tuple((event.time, event.time+1000.)) for c in codes]
             logger.debug('selection: ', selection)
             try:
-                st = ws.station(site='iris', selection=selection)
+                st = ws.station(site=site, selection=selection)
             except ws.EmptyResult as e:
-                logging.error('%s on %s' %(e, array_id))
+                logging.error('%s on %s. skip' %(e, array_id))
+                continue
 
             stations = st.get_pyrocko_stations()
             min_dist = min(
@@ -183,7 +198,7 @@ class DataProvider(Object):
                 tend = timing[1].t(mod, (event.depth, max_dist))
             selection = [c + tuple((event.time + tstart, event.time + tend)) for c in codes]
             try:
-                d = ws.dataselect(site='iris', selection=selection)
+                d = ws.dataselect(site=site, selection=selection)
                 create_directory(sub_directory, force)
                 fn = pjoin(sub_directory, 'traces.mseed')
                 with open(fn, 'w') as f:
@@ -217,4 +232,4 @@ if __name__=="__main__":
     provider = DataProvider()
     tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.001)
     tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=1000.)
-    provider.download(e, timing=(tmin, tmax), dump_config=True, want='YKA', force=True)
+    provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, site='geofon')
