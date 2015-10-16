@@ -51,8 +51,8 @@ def init(args):
 
             model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
             provider = DataProvider()
-            tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=100.)
-            tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=600.)
+            tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
+            tmax = CakeTiming(phase_selection='first(p|P|PP)+80', fallback_time=600.)
             provider.download(e, timing=(tmin, tmax), prefix=name, dump_config=True)
             logger.info('.'*30)
             logger.info('Prepared project %s for you' % name)
@@ -76,6 +76,10 @@ def beam(args):
                    fn_dump_center=pjoin(directory, 'array_center.pf'),
                    fn_beam=pjoin(directory, 'beam.mseed'),
                    station=array_id)
+        if args.plot:
+            bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
+
+
 
 def propose_stores(args):
     e = list(model.Event.load_catalog('event.pf'))
@@ -92,6 +96,7 @@ def propose_stores(args):
                                     source_depth_delta=args.sddelta,
                                     sample_rate=args.sample_rate,
                                     force_overwrite=args.force_overwrite)
+
 
 def process(args):
     raise Exception('Not implemented')
@@ -128,9 +133,13 @@ if __name__=='__main__':
                                 help='run beamforming',
                                 action='store_true')
     group_beam.add_argument('--normalize',
-                                help='normlize by standard deviation of trace',
-                                action='store_true',
-                            default=True)
+                            help='normlize by standard deviation of trace',
+                            action='store_true')
+    group_beam.add_argument('--plot',
+                            help='create plots showing stations and store them '
+                            'in sub-directories',
+                            action='store_true',
+                            default=False)
 
 
     group_getagain = parser.add_argument_group('Create stores')
@@ -149,7 +158,7 @@ if __name__=='__main__':
     group_getagain.add_argument('--source-depth-max',
                                 dest='sdmax',
                                 help='minimum source depth of store [km]. Default 15',
-                                default=0.)
+                                default=15.)
     group_getagain.add_argument('--source-depth-delta',
                                 dest='sddelta',
                                 help='delte source depth of store [km]. Default 1',
@@ -173,17 +182,4 @@ if __name__=='__main__':
 
     if args.beam:
         beam(args)
-
-    # init
-    # -download data, store download infos in subdir
-
-    # getagain
-    # first modify get options
-    # run getagain
-
-    # storify
-    # create possible stores
-
-    # process
-
 
