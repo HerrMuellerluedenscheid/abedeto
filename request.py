@@ -134,10 +134,16 @@ class DataProvider(Object):
                         'BermudaIA': ('IM', 'I51H?', '', channels),
                         'FairbanksIA': ('IM', 'I53H?', '', channels)}
 
-        self.geofon_arrays = {'GERES':[('GR', 'GEA?', '', channels),
-                                     ('GR', 'GEB?', '', channels),
-                                     ('GR', 'GEC?', '', channels),
-                                     ('GR', 'GED?', '', channels)]}
+        self.geofon_arrays = {'GERES':[('GR', 'GEA?', '*', channels),
+                                     ('GR', 'GEB?', '*', channels),
+                                     ('GR', 'GEC?', '*', channels),
+                                     ('GR', 'GED?', '*', channels)],
+                              'ROHRBACH':('6A', 'V*', '', channels),
+                              'AntaOffshore': ('GR', 'I27L?', '*', channels),
+                              'AntaOnshore': ('AW', 'VNA*', '*', channels),
+                              'NORES': [('NO', 'NA*', '*', channels),
+                                       ('NO', 'NB*', '*', channels),
+                                       ('NO', 'NC*', '*', channels)]}
     
     def download(self, event, directory='array_data', timing=None, length=None,
                  want='all', force=False, prefix=False, dump_config=False, site='iris'):
@@ -229,7 +235,7 @@ if __name__=="__main__":
     args = parser.parse_args()
     length = 1000.
     e = list(model.Event.load_catalog(args.events))[0]
-    provider = DataProvider()
+    provider = DataProvider(channels='*')
     tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.001)
     tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=1000.)
     provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, site='geofon')
