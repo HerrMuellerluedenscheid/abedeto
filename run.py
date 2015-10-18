@@ -149,7 +149,7 @@ if __name__=='__main__':
     group_getagain.add_argument('--source-depth-max',
                                 dest='sdmax',
                                 help='minimum source depth of store [km]. Default 15',
-                                default=0.)
+                                default=15.)
     group_getagain.add_argument('--source-depth-delta',
                                 dest='sddelta',
                                 help='delte source depth of store [km]. Default 1',
