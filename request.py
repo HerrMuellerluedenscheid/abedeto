@@ -167,6 +167,7 @@ class DataProvider(Object):
                 st = ws.station(site='iris', selection=selection)
             except ws.EmptyResult as e:
                 logging.error('%s on %s' %(e, array_id))
+                continue
 
             stations = st.get_pyrocko_stations()
             min_dist = min(
