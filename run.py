@@ -7,6 +7,8 @@ from util import create_directory
 from request import DataProvider, CakeTiming
 import store_creator
 import logging
+from array_map import ArrayMap
+
 
 pjoin = os.path.join
 
@@ -27,38 +29,35 @@ def one_2_list(items):
 
 
 def init(args):
-    ev = list(model.Event.load_catalog(args.events))
-    if len(ev) == 1:
-        if args.name:
-            name = args.name
+    events = model.load_catalog(args.events)
+    if args.name and len(events)>1:
+        logger.warn("Cannot use defined name if list of events. Will"
+                        " use event names instead")
+    for i_e, e in enumerate(ev):
+        if e.name:
+            name = e.name
         else:
-            name = ev[0].name
+            logger.warn("event name is empty. Skipping...")
+            continue
+
         create_directory(name, args.force)
         create_directory(name, args.force)
+
+        model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
+        if args.download:
+            download(event=e, prefix=name)
+        logger.info('.' * 30)
+        logger.info('Prepared project directory %s for you' % name)
+
+def download(args, event=None, prefix=''):
+    provider = DataProvider()
+    if args.download_settings:
+        settings = args.download_settings
+        provider.download(settings)
     else:
-        if args.name:
-            logger.warn("Cannot use defined name if list of events. Will"
-                            " use event names instead")
-        for i_e, e in enumerate(ev):
-            if e.name:
-                name = e.name
-            else:
-                logger.warn("event name is empty. Skipping...")
-                continue
-
-            create_directory(name, args.force)
-            create_directory(name, args.force)
-
-            model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
-            provider = DataProvider()
-            tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=100.)
-            tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=600.)
-            provider.download(e, timing=(tmin, tmax), prefix=name, dump_config=True)
-            logger.info('.'*30)
-            logger.info('Prepared project %s for you' % name)
-
-def getagain(args):
-    raise Exception('Not implemented')
+        tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=100.)
+        tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=600.)
+        provider.download(event, timing=(tmin, tmax), prefix=prefix, dump_config=True)
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
@@ -66,6 +65,7 @@ def beam(args):
     assert len(event)==1
     event = event[0]
     provider = DataProvider.load(filename='request.yaml')
+    array_centers = []
     for array_id in provider.use:
         directory = pjoin('array_data', array_id)
         traces = io.load(pjoin(directory, 'traces.mseed'))
@@ -76,6 +76,12 @@ def beam(args):
                    fn_dump_center=pjoin(directory, 'array_center.pf'),
                    fn_beam=pjoin(directory, 'beam.mseed'),
                    station=array_id)
+
+        array_centers.append(bf.station_c)
+
+    map = ArrayMap(stations=array_centers, station_label_mapping=provider.use,
+                   event=event)
+    map.save(args.map_filename)
 
 def propose_stores(args):
     e = list(model.Event.load_catalog('event.pf'))
@@ -117,48 +123,53 @@ if __name__=='__main__':
                             default=False,
                             help='force overwrite')
 
-    group_getagain = parser.add_argument_group('Re-retrieve the data')
-    group_getagain.add_argument('--getagain',
-                                help='',
+    group_download = parser.add_argument_group('Download the data')
+    group_download.add_argument('--download',
+                                help='download available data',
                                 default=False,
                                 action='store_true')
+    group_download.add_argument('--settings',
+                                help='Load download settings.',
+                                dest='download_settings')
 
     group_beam = parser.add_argument_group('Beam Forming')
     group_beam.add_argument('--beam',
                                 help='run beamforming',
                                 action='store_true')
+    gourp_beam.add_argument('--map_filename', help='filename of map',
+                            default='map.png')
     group_beam.add_argument('--normalize',
-                                help='normlize by standard deviation of trace',
-                                action='store_true',
+                            help='normlize by standard deviation of trace',
+                            action='store_true',
                             default=True)
 
 
-    group_getagain = parser.add_argument_group('Create stores')
-    group_getagain.add_argument('--storify',
+    group_store = parser.add_argument_group('Create stores')
+    group_store.add_argument('--storify',
                                 help='',
                                 default=False,
                                 action='store_true')
-    group_getagain.add_argument('--super-dir',
+    group_store.add_argument('--super-dir',
                                 dest='store_dir',
                                 help='super directory where to search/create stores',
                                 default='stores')
-    group_getagain.add_argument('--source-depth-min',
+    group_store.add_argument('--source-depth-min',
                                 dest='sdmin',
                                 help='minimum source depth of store [km]. Default 0',
                                 default=0.)
-    group_getagain.add_argument('--source-depth-max',
+    group_store.add_argument('--source-depth-max',
                                 dest='sdmax',
                                 help='minimum source depth of store [km]. Default 15',
                                 default=15.)
-    group_getagain.add_argument('--source-depth-delta',
+    group_store.add_argument('--source-depth-delta',
                                 dest='sddelta',
                                 help='delte source depth of store [km]. Default 1',
                                 default=1.)
-    group_getagain.add_argument('--sampling-rate',
+    group_store.add_argument('--sampling-rate',
                                 dest='sample_rate',
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
-    group_getagain.add_argument('--force-store',
+    group_store.add_argument('--force-store',
                                 dest='force_overwrite',
                                 help='overwrite existent stores',
                                 action='store_false')
@@ -167,6 +178,9 @@ if __name__=='__main__':
 
     if args.init:
         init(args)
+
+    if args.download:
+        download(args)
 
     if args.storify:
         propose_stores(args)
