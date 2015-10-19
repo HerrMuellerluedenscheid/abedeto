@@ -56,28 +56,18 @@ def download(args, event=None, prefix=''):
     provider = DataProvider()
     if args.download_settings:
         settings = args.download_settings
-        provider.download(settings)
+        provider.download(event, settings=settings)
     else:
-        if args.name:
-            logger.warn("Cannot use defined name if list of events. Will"
-                            " use event names instead")
-        for i_e, e in enumerate(ev):
-            if e.name:
-                name = e.name
-            else:
-                logger.warn("event name is empty. Skipping...")
-                continue
 
-            create_directory(name, args.force)
-            create_directory(name, args.force)
+        e = event
+        #create_directory(name, args.force)
+        #create_directory(name, args.force)
 
-            model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
-            provider = DataProvider()
-            tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
-            tmax = CakeTiming(phase_selection='first(p|P|PP)+80', fallback_time=600.)
-            provider.download(e, timing=(tmin, tmax), prefix=name, dump_config=True)
-            logger.info('.'*30)
-            logger.info('Prepared project %s for you' % name)
+        #model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
+        provider = DataProvider()
+        tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
+        tmax = CakeTiming(phase_selection='first(p|P|PP)+120', fallback_time=600.)
+        provider.download(e, timing=(tmin, tmax), prefix='', dump_config=True)
 
 
 def beam(args):

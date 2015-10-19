@@ -44,18 +44,17 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
     config.distance_max = math.ceil(distance+5*km)
     config.distance_delta = 10*km
     configid = ''
-    for item in zip([station, event],['earthmodel_1d', 'earthmodel_receiver_1d']):
+    for item in zip([station, event],['earthmodel_receiver_1d', 'earthmodel_1d']):
         location, model_id = item
-        print ' HIER SIEHE VERSION AUF ARAGORN '
-        if model_id=='earthmodel_1d':
-            mod = cake.load_model()
-            mod = mod.replaced_crust((location.lat, location.lon))
-            configid += '%s_%s_' % (station.station, crust2x2.get_profile(location.lat, location.lon)._ident)
-        else:
+        if model_id=='earthmodel_receiver_1d':
             mod = cake.LayeredModel.from_scanlines(
                 cake.from_crust2x2_profile(
                     crust2x2.get_profile(location.lat, location.lon)))
-            configid += '%s' % crust2x2.get_profile(location.lat, location.lon)._ident
+            configid += '%s_%s_' % (station.station, crust2x2.get_profile(location.lat, location.lon)._ident)
+        else:
+            mod = cake.load_model()
+            mod = mod.replaced_crust((location.lat, location.lon))
+            configid += '%s' % (crust2x2.get_profile(location.lat, location.lon)._ident)
         setattr(config, model_id, mod)
 
     config.id = configid
@@ -88,8 +87,8 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
 
     qs = qseis.QSeisConfig()
     qs.qseis_version = config.modelling_code_id.split('.')[1]
-    qs.time_region = (Timing('P-50'), Timing('P+100'))
-    qs.cut = (Timing('P-50'), Timing('P+100'))
+    qs.time_region = (Timing('begin-50'), Timing('begin+100'))
+    qs.cut = (Timing('begin-50'), Timing('begin+100'))
     qs.slowness_window = (0., 0., slow+slow*0.5, slow+slow*0.8)
     qs.filter_shallow_paths = 1
     qs.filter_shallow_paths_depth = round(distance/100000.)
