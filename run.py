@@ -45,6 +45,7 @@ def init(args):
 
         model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
         if args.download:
+            print 'asssssssssssssssss'
             download(args, event=e, prefix=name)
         logger.info('.' * 30)
         logger.info('Prepared project directory %s for you' % name)
@@ -54,16 +55,11 @@ def download(args, event=None, prefix=''):
         event = model.Event.load_catalog('event.pf')
         event = one_or_error(event)
     provider = DataProvider()
-    if args.download_settings:
+    try:
         settings = args.download_settings
         provider.download(event, settings=settings)
-    else:
-
+    except (AttributeError, TypeError):
         e = event
-        #create_directory(name, args.force)
-        #create_directory(name, args.force)
-
-        #model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
         provider = DataProvider()
         tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
         tmax = CakeTiming(phase_selection='first(p|P|PP)+120', fallback_time=600.)
@@ -109,23 +105,30 @@ def propose_stores(args):
         directory = pjoin('array_data', array_id)
         station = model.load_stations(pjoin(directory, 'array_center.pf'))
         station = one_or_error(station)
-        store_creator.propose_store(station, e, superdir=args.store_dir,
-                                    source_depth_min=args.sdmin,
-                                    source_depth_max=args.sdmax,
-                                    source_depth_delta=args.sddelta,
-                                    sample_rate=args.sample_rate,
-                                    force_overwrite=args.force_overwrite)
+        configid = store_creator.propose_store(station, e, superdir=args.store_dir,
+                                               source_depth_min=args.sdmin,
+                                               source_depth_max=args.sdmax,
+                                               source_depth_delta=args.sddelta,
+                                               sample_rate=args.sample_rate,
+                                               force_overwrite=args.force_overwrite)
+        provider.store_mapping[station] = configid
 
 
 def process(args):
     from guesstimate_depth_v02.py import PlotSettings, plot
 
+    provider = DataProvider.load(filename='request.yaml')
     if args.plot_settings:
         settings = PlotSettings.load(filename=args.plot_settings)
     else:
         settings = PlotSettings.from_argument_parser(args)
 
-    plot(settings)
+    subdir = pjoin(array_id, 'array_data')
+    for array_id in provider.use:
+        settings.trace_filename = pjoin(subdir, 'beam.mseed')
+        settings.station_filename = pjoin(subdir, 'array_center.pf')
+        settings.store_id = provider.store_mapping[station]
+        plot(settings)
 
 
 
@@ -133,96 +136,145 @@ if __name__=='__main__':
     import argparse
 
     parser = argparse.ArgumentParser('What was the depth, again?', add_help=True)
-
-    group_init = parser.add_argument_group('Initialization')
-    group_init.add_argument('--init',
+    sp = parser.add_subparsers(dest='cmd')
+    init_parser = sp.add_parser('init', help='create a new project')
+    init_parser.add_argument('--events',
+                             help='Event you don\'t know the depth of',
+                             required=True)
+    init_parser.add_argument('--name', help='name')
+    init_parser.add_argument('--download',
                             action='store_true',
                             default=False,
-                            help='create new job')
-    group_init.add_argument('--events',
-                        help='Event you don\'t know the depth of')
-    group_init.add_argument('--name',
-                        help='name')
-    group_init.add_argument('--force',
+                            help='download available data right away.')
+    init_parser.add_argument('--force',
                             action='store_true',
                             default=False,
                             help='force overwrite')
 
-    group_download = parser.add_argument_group('Download the data')
-    group_download.add_argument('--download',
+    download_parser = sp.add_parser('download', help='Download data')
+    download_parser.add_argument('--download',
                                 help='download available data',
                                 default=False,
                                 action='store_true')
-    group_download.add_argument('--settings',
+    download_parser.add_argument('--settings',
                                 help='Load download settings.',
-                                dest='download_settings')
+                                dest='download_settings',
+                                default=False)
 
-    group_beam = parser.add_argument_group('Beam Forming')
-    group_beam.add_argument('--beam',
+    beam_parser = sp.add_parser('beam', help='Beam forming')
+    beam_parser.add_argument('--beam',
                                 help='run beamforming',
                                 action='store_true')
-    group_beam.add_argument('--map_filename', help='filename of map',
+    beam_parser.add_argument('--map_filename', help='filename of map',
                             default='map.png')
-    group_beam.add_argument('--normalize',
+    beam_parser.add_argument('--normalize',
                             help='normlize by standard deviation of trace',
                             action='store_true',
                             default=True)
-    group_beam.add_argument('--plot',
+    beam_parser.add_argument('--plot',
                             help='create plots showing stations and store them '
                             'in sub-directories',
                             action='store_true',
                             default=False)
 
 
-    group_store = parser.add_argument_group('Create stores')
-    group_store.add_argument('--storify',
-                                help='',
-                                default=False,
-                                action='store_true')
-    group_store.add_argument('--super-dir',
+    store_parser = sp.add_parser('stores', help='Propose GF stores')
+
+    store_parser.add_argument('--super-dir',
                                 dest='store_dir',
                                 help='super directory where to search/create stores',
                                 default='stores')
-    group_store.add_argument('--source-depth-min',
+    store_parser.add_argument('--source-depth-min',
                                 dest='sdmin',
                                 help='minimum source depth of store [km]. Default 0',
                                 default=0.)
-    group_store.add_argument('--source-depth-max',
+    store_parser.add_argument('--source-depth-max',
                                 dest='sdmax',
                                 help='minimum source depth of store [km]. Default 15',
                                 default=15.)
-    group_store.add_argument('--source-depth-delta',
+    store_parser.add_argument('--source-depth-delta',
                                 dest='sddelta',
                                 help='delte source depth of store [km]. Default 1',
                                 default=1.)
-    group_store.add_argument('--sampling-rate',
+    store_parser.add_argument('--sampling-rate',
                                 dest='sample_rate',
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
-    group_store.add_argument('--force-store',
+    store_parser.add_argument('--force-store',
                                 dest='force_overwrite',
                                 help='overwrite existent stores',
                                 action='store_false')
 
-    group_store = parser.add_argument_group('Process')
-    group_store.add_argument('--process',
-                                help='',
-                                default=False,
-                                action='store_true')
-    group_store.add_argument('--config',
+    process_parser = sp.add_parser('process', help='Create images')
+    process_parser.add_argument('--config',
                                 help='settings file',
-                                default=False)
+                                default=False,
+                                required=False)
+    #process_parser.add_argument('--trace', help='name of file containing trace',
+    #                           required=True)
+    #process_parser.add_argument('--station',
+    #                    help='name of file containing station information',
+    #                    required=True)
+    #process_parser.add_argument('--event',
+    #                    help='name of file containing event catalog',
+    #                    required=True)
+    #process_parser.add_argument('--store',
+    #                    help='name of store id',
+    #                    required=True)
+    #process_parser.add_argument('--pick',
+    #                    help='name of file containing p marker',
+    #                    required=True)
+    process_parser.add_argument('--depth',
+                        help='assumed source depth [km]',
+                        default=10.,
+                        required=False)
+    process_parser.add_argument('--depths',
+                        help='testing depths in km. zstart:zstop:delta',
+                        default=0,
+                        required=False)
+    process_parser.add_argument('--quantity',
+                        help='velocity|displacement',
+                        default='velocity',
+                        required=False)
+    process_parser.add_argument('--filter',
+                        help='4th order butterw. default: "0.7:4.5"',
+                        default="0.7:4.5",
+                        required=False)
+    #process_parser.add_argument('--correction',
+    #                    help='correction in time [s]',
+    #                    default=0,
+    #                   required=False)
+
+    # MUSS WIEDER REIN NACH GRUPPIERUNG
+    process_parser.add_argument('--normalize',
+                        help='normalize traces to 1',
+                        action='store_true',
+                        required=False)
+    process_parser.add_argument('--skip_true',
+                        help='if true, do not plot recorded and the assigned synthetic trace on top of each other',
+                        action='store_true',
+                        required=False)
+    #process_parser.add_argument('--out_filename',
+    #                    help='file to store image',
+    #                    required=False)
+    process_parser.add_argument('--print_parameters',
+                        help='creates a text field giving the used parameters',
+                        required=False)
+
     args = parser.parse_args()
 
-    if args.init:
+    if args.cmd == 'init':
         init(args)
 
-    if args.download:
+    if args.cmd == 'download':
         download(args)
 
-    if args.storify:
+    if args.cmd == 'stores':
         propose_stores(args)
 
-    if args.beam:
+    if args.cmd == 'beam':
+        beam(args)
+
+    if args.cmd == 'process':
         beam(args)
 
