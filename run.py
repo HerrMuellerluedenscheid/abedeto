@@ -45,11 +45,14 @@ def init(args):
 
         model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
         if args.download:
-            download(event=e, prefix=name)
+            download(args, event=e, prefix=name)
         logger.info('.' * 30)
         logger.info('Prepared project directory %s for you' % name)
 
 def download(args, event=None, prefix=''):
+    if not event:
+        event = model.Event.load_catalog('event.pf')
+        event = one_or_error(event)
     provider = DataProvider()
     if args.download_settings:
         settings = args.download_settings
@@ -101,9 +104,11 @@ def beam(args):
 
         array_centers.append(bf.station_c)
 
-    map = ArrayMap(stations=array_centers, station_label_mapping=provider.use,
-                   event=event)
-    map.save(args.map_filename)
+    # how to define map dimensions?
+    #map = ArrayMap(stations=array_centers,
+    #               station_label_mapping=provider.use,
+    #               event=event)
+    #map.save(args.map_filename)
 
 def propose_stores(args):
     e = list(model.Event.load_catalog('event.pf'))
@@ -123,7 +128,14 @@ def propose_stores(args):
 
 
 def process(args):
-    raise Exception('Not implemented')
+    from guesstimate_depth_v02.py import PlotSettings, plot
+
+    if args.plot_settings:
+        settings = PlotSettings.load(filename=args.plot_settings)
+    else:
+        settings = PlotSettings.from_argument_parser(args)
+
+    plot(settings)
 
 
 
@@ -202,6 +214,14 @@ if __name__=='__main__':
                                 help='overwrite existent stores',
                                 action='store_false')
 
+    group_store = parser.add_argument_group('Process')
+    group_store.add_argument('--process',
+                                help='',
+                                default=False,
+                                action='store_true')
+    group_store.add_argument('--config',
+                                help='settings file',
+                                default=False)
     args = parser.parse_args()
 
     if args.init:

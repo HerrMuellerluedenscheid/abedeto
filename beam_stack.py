@@ -86,12 +86,16 @@ class BeamForming(Object):
             dist = ortho.distance_accurate50m(event, self.station_c)
             ray = timing.t(mod, (event.depth, dist), get_ray=True)
             if ray is None:
-                logger.error('None of defined phases available at beam station:'
-                             '\n %s' % self.station_c)
-                return 
+                logger.error('None of defined phases available at beam station:\n %s' % self.station_c)
+                return
             else:
-                self.bazi = ortho.azimuth(self.station_c, event)
+                b = ortho.azimuth(self.station_c, event)
+                if b>=0.:
+                    self.bazi = b
+                elif b<0.:
+                    self.bazi = 360.+bb
                 self.slow = ray.p/(cake.r2d*cake.d2m)
+                print 'CHECK SLOWNESS!: ', self.slow, dist
         else:
             self.bazi = bazi
             self.slow = slow

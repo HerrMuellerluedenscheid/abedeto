@@ -46,6 +46,7 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
     configid = ''
     for item in zip([station, event],['earthmodel_1d', 'earthmodel_receiver_1d']):
         location, model_id = item
+        print ' HIER SIEHE VERSION AUF ARAGORN '
         if model_id=='earthmodel_1d':
             mod = cake.load_model()
             mod = mod.replaced_crust((location.lat, location.lon))

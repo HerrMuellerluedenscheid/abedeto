@@ -44,7 +44,7 @@ class PlotSettings(Object):
     title = String.T(default='%{array_id}s - %{event_name}s', help='Add default title.')
 
     @classmethod
-    def from_arguement_parser(cls, args):
+    def from_argument_parser(cls, args):
         hp, lp = args.filter.split(':')
         filters = [
             ButterworthResponse(corner=float(lp), order=4, type='low'),

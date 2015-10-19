@@ -106,6 +106,7 @@ class DataProvider(Object):
         self.iris_arrays = {'YKA': ('CN', 'YKA*', '', channels),
                        'ESK': [('IM', 'EKB?', '', channels),
                                ('IM', 'EKR*', '', channels)],
+                       'ESK1': ('IM', 'EKA?', '', channels),
                        'ILAR': ('IM', 'IL*', '', channels),
                        'IMA': ('IM', 'IM0?', '', channels),
                        'NIA': ('IM', 'I56H?', '', channels),
