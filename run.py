@@ -29,11 +29,11 @@ def one_2_list(items):
 
 
 def init(args):
-    events = model.load_catalog(args.events)
+    events = model.Event.load_catalog(args.events)
     if args.name and len(events)>1:
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
-    for i_e, e in enumerate(ev):
+    for i_e, e in enumerate(events):
         if e.name:
             name = e.name
         else:
@@ -159,13 +159,12 @@ if __name__=='__main__':
     group_beam.add_argument('--beam',
                                 help='run beamforming',
                                 action='store_true')
-    gourp_beam.add_argument('--map_filename', help='filename of map',
+    group_beam.add_argument('--map_filename', help='filename of map',
                             default='map.png')
     group_beam.add_argument('--normalize',
                             help='normlize by standard deviation of trace',
                             action='store_true',
                             default=True)
-                            action='store_true')
     group_beam.add_argument('--plot',
                             help='create plots showing stations and store them '
                             'in sub-directories',
