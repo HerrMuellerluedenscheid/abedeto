@@ -4,6 +4,7 @@ import matplotlib
 import math
 matplotlib.use = 'QtAgg4'
 import matplotlib.pyplot as plt
+import logging
 from pyrocko import io
 from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
@@ -14,19 +15,22 @@ from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 km = 1000.
 
-
-import argparse
-
+logger = logging.getLogger('guesstimate')
 
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
-                              'plotting, incl. path.')
+                              'plotting, incl. path.',
+                              optional=True)
     station_filename = String.T(help='filename containing station meta '
-                               'information related to *trace_filename*.')
+                               'information related to *trace_filename*.',
+                                optional=True)
     event_filename = String.T(help='filename containing event information '
-                              'including the expected moment tensor.')
+                              'including the expected moment tensor.',
+                              default='event.pf')
     store_id = String.T(help='Store ID to use for generating the synthetic '
-                        'traces.')
+                        'traces.',
+                        optional=True)
+    store_superdirs = List.T(String.T(), optional=True)
     depth = Float.T(help='Depth [km] where to put the trace.')
     depths = String.T(help='Synthetic source depths [km]. start:stop:delta. '
                       'default: 0:15:1',
@@ -36,12 +40,15 @@ class PlotSettings(Object):
     zoom = List.T(Float.T(), help='Window to visualize with reference to the P '
                   'phase onset [s].', default=[-7, 15])
     onset_correction = Float.T(help='time shift, to move beam trace.', default=0.)
-    normalization = Bool.T(help='normalize by maximum amplitude', default=True)
+    normalize = Bool.T(help='normalize by maximum amplitude', default=True)
     # do I need this, here?
     save_as = String.T(default='depth_estimate.png', help='filename')
     auto_caption = Bool.T(help='add a caption giving basic information. Needs '
-                               'implementation.')
+                               'implementation.',
+                          default=False)
     title = String.T(default='%{array_id}s - %{event_name}s', help='Add default title.')
+    quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
+                        'displacement-> integrate recorded')
 
     @classmethod
     def from_argument_parser(cls, args):
@@ -49,14 +56,17 @@ class PlotSettings(Object):
         filters = [
             ButterworthResponse(corner=float(lp), order=4, type='low'),
             ButterworthResponse(corner=float(hp), order=4, type='high')]
-        cls(trace_filename=args.trace,
-            station_filename=args.station,
-            event_filename=args.event,
-            store_id=args.store,
-            depth=args.depth,
-            depths=args.depths,
-            filters=filters)
-        raise Exception('needs implementation')
+        kwargs = {}
+        for arg in ['station_filename', 'trace_filename', 'store_id']:
+            try:
+                kwargs.update({arg: getattr(args, arg)})
+            except AttributeError:
+                logger.debug('trace_filename not defined in args')
+                kwargs.update({arg: None})
+        return cls(depth=args.depth,
+                   depths=args.depths,
+                   filters=filters,
+                   **kwargs)
 
 
 class GaussNotch(FrequencyResponse):
@@ -87,17 +97,22 @@ def station_to_target(s, quantity, store_id):
                  store_id=store_id)
 
 if __name__=='__main__':
+    import argparse
     parser = argparse.ArgumentParser(description='Find depth.')
     parser.add_argument('--trace',
                         help='name of file containing trace',
+                        dest='trace_filename',
                         required=True)
     parser.add_argument('--station',
+                        dest='station_filename',
                         help='name of file containing station information',
                         required=True)
     parser.add_argument('--event',
                         help='name of file containing event catalog',
+                        dest='event_filename',
                         required=True)
     parser.add_argument('--store',
+                        dest='store_id',
                         help='name of store id',
                         required=True)
     parser.add_argument('--pick',
@@ -165,20 +180,19 @@ def plot(settings):
 
     #notch = 0.15 # use this for GERES
     #notch = False
-    quantity = args.quantity
-    lp, hp = args.filter.split(':')
-    bandpass = {'order': 4, 'corner_hp': float(lp), 'corner_lp': float(hp) }
+    quantity = settings.quantity
+    #lp, hp = args.filter.split(':')
+    #bandpass = {'order': 4, 'corner_hp': float(lp), 'corner_lp': float(hp) }
 
-    if args.depths:
-        zstart, zstop, inkr = args.depths.split(':')
-        test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
-    else:
-        test_depths = num.arange(0*km, 40*km, 1*km)
+    zstart, zstop, inkr = settings.depths.split(':')
+    test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
 
-    traces = io.load(args.trace)
+    traces = io.load(settings.trace_filename)
 
-    event = model.load_events(args.event)[0]
-    event.depth = float(args.sdepth) * 1000.
+    event = model.load_events(settings.event_filename)
+    assert len(event)==1
+    event = event[0]
+    event.depth = float(settings.depth) * 1000.
     base_source = DCSource.from_pyrocko_event(event)
 
     test_sources = []
@@ -190,17 +204,15 @@ def plot(settings):
         s.depth = float(d)
         test_sources.append(s)
 
-    e = LocalEngine(store_superdirs=['/media/usb/stores'])
-    station = model.load_stations(args.station)
-    targets = [station_to_target(station[0], quantity=args.quantity, store_id=args.store)]
-    print targets[0]
-    print 'distance: ', targets[0].distance_to(base_source)
-    request = e.process(targets=targets,
-                         sources=test_sources)
+    if settings.store_superdirs:
+        e = LocalEngine(store_superdirs=settings.store_superdirs)
+    else:
+        e = LocalEngine(use_config=True)
+    station = model.load_stations(settings.station_filename)
+    targets = [station_to_target(station[0], quantity=quantity, store_id=settings.store_id)]
+    request = e.process(targets=targets, sources=test_sources)
     alldepths = list(test_depths)
-    #alldepths.append(base_source.depth)
     depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
-    print depth_count
 
     target_count = dict(zip([t.codes[:3] for t in targets], range(len(targets))))
 
@@ -212,24 +224,26 @@ def plot(settings):
         axs = [axs]
 
     for s, t, tr in request.iter_results():
-        if s.depth == base_source.depth and args.skip_true:
-            continue
-        tr.bandpass(**bandpass)
-        if notch:
-            notch_filter(tr, 2*num.pi*notch, 1.5)
+        #if s.depth == base_source.depth and args.skip_true:
+        #    continue
+        #tr.bandpass(**bandpass)
+        #if notch:
+        #    notch_filter(tr, 2*num.pi*notch, 1.5)
         if quantity=='velocity':
             diff_response = DifferentiationResponse()
             tr = tr.transfer(transfer_function=diff_response, tfade=20, freqlimits=(0.1, 0.2, 10., 20.))
 
         ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
         onset = e.get_store(t.store_id).t('P', (s.depth, s.distance_to(t)))
-        store = e.get_store(args.store)
+        store = e.get_store(settings.store_id)
         mod = store.config.earthmodel_1d
         #onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
         #                              distances=[s.distance_to(t)*cake.m2d],
         #                              zstart=s.depth)[0].t
         ydata = tr.get_ydata()
-        if args.normalize:
+        for f in settings.filters:
+            tr = tr.transfer(transfer_function=f, tfade=10)
+        if settings.normalize:
             ydata = ydata/num.max(abs(ydata))
             ax.tick_params(axis='y',
                            which='both',
@@ -239,10 +253,10 @@ def plot(settings):
 
         ax.plot(tr.get_xdata()-s.time-onset, ydata)
         ax.set_xlim(zoom_window)
-        if not args.no_y_axis:
-            ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
-                    transform=ax.transAxes,
-                    horizontalalignment='right')
+        #if not args.no_y_axis:
+        #    ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
+        #            transform=ax.transAxes,
+        #            horizontalalignment='right')
         ax.axes.patch.set_visible(False)
         if True:
             arrivals = mod.arrivals(phases=[cake.PhaseDef('pP')], 
@@ -269,23 +283,26 @@ def plot(settings):
 
     for tr in traces:
         try:
-            correction = float(args.correction)
+            correction = float(settings.onset_correction)
         except KeyError:
             correction = 0
-        marker = load_markers(args.pick)[0]
-        ponset = marker.tmin
+        #marker = load_markers(args.pick)[0]
+        #ponset = marker.tmin
 
         if quantity=='displacement':
             integration_response = IntegrationResponse()
             tr = tr.transfer(transfer_function=integration_response,
                              tfade=20,
                              freqlimits=(0.10, 0.2, 10., 20.))
-        if notch:
-            notch_filter(tr, 2*num.pi*notch, 1.5)
-        tr.bandpass(**bandpass)
+        #if notch:
+        #    notch_filter(tr, 2*num.pi*notch, 1.5)
+        for f in settings.filters:
+            tr = tr.transfer(transfer_function=f, tfade=10)
+
+        #tr.bandpass(**bandpass)
         ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
         ydata = tr.get_ydata()
-        if args.normalize:
+        if settings.normalize:
             ydata = ydata/max(abs(ydata))
             ax.tick_params(axis='y',
                            which='both',
@@ -294,21 +311,21 @@ def plot(settings):
                            labelleft='off')
 
         ax.plot(tr.get_xdata()-ponset+correction, ydata, c='black', linewidth=2)
-        if not args.no_y_axis:
-            ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
-                    transform=ax.transAxes,
-                    horizontalalignment='right')
+        #if not args.no_y_axis:
+        #    ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
+        #            transform=ax.transAxes,
+        #            horizontalalignment='right')
         ax.axes.get_xaxis().set_visible(False)
         ax.axes.patch.set_visible(False)
         for item in ax.spines.values():
             item.set_visible(False)
         ax.set_xlim(zoom_window)
-    if args.title:
-        fig.suptitle(args.title)
+    #if settings.title:
+    #    fig.suptitle(args.title)
     bottom = 0.1
     plt.subplots_adjust(hspace=-.4,
                         bottom=bottom)
-    if args.out_filename:
-        fig.savefig(args.out_filename)
-    plt.show()
+    if settings.out_filename:
+        fig.savefig(settings.out_filename)
+    #plt.show()
 
