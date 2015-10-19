@@ -3,6 +3,7 @@ from request import DataProvider
 from beam_stack import BeamForming
 from pyrocko import model
 from pyrocko import io
+from pyrocko.guts import Object, Dict, String
 from util import create_directory
 from request import DataProvider, CakeTiming
 import store_creator
@@ -15,6 +16,12 @@ pjoin = os.path.join
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('run')
 
+stores_superdir = 'stores'
+array_data = 'array_data'
+event_fn = 'event.pf'
+
+class StoreMapper(Object):
+    mapping = Dict.T(String.T(), String.T())
 
 def one_or_error(items):
     e = list(items)
@@ -43,16 +50,15 @@ def init(args):
         create_directory(name, args.force)
         create_directory(name, args.force)
 
-        model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
+        model.Event.dump_catalog([e], pjoin(name, event_fn))
         if args.download:
-            print 'asssssssssssssssss'
             download(args, event=e, prefix=name)
         logger.info('.' * 30)
         logger.info('Prepared project directory %s for you' % name)
 
 def download(args, event=None, prefix=''):
     if not event:
-        event = model.Event.load_catalog('event.pf')
+        event = model.Event.load_catalog(event_fn)
         event = one_or_error(event)
     provider = DataProvider()
     try:
@@ -68,13 +74,13 @@ def download(args, event=None, prefix=''):
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
-    event = list(model.Event.load_catalog('event.pf'))
+    event = list(model.Event.load_catalog(event_fn))
     assert len(event)==1
     event = event[0]
     provider = DataProvider.load(filename='request.yaml')
     array_centers = []
     for array_id in provider.use:
-        directory = pjoin('array_data', array_id)
+        directory = pjoin(array_data, array_id)
         traces = io.load(pjoin(directory, 'traces.mseed'))
         stations = model.load_stations(pjoin(directory, 'stations.pf'))
         bf = BeamForming(stations, traces, normalize=args.normalize)
@@ -86,8 +92,6 @@ def beam(args):
         if args.plot:
             bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
 
-
-
         array_centers.append(bf.station_c)
 
     # how to define map dimensions?
@@ -97,12 +101,13 @@ def beam(args):
     #map.save(args.map_filename)
 
 def propose_stores(args):
-    e = list(model.Event.load_catalog('event.pf'))
+    store_mapper = StoreMapper()
+    e = list(model.Event.load_catalog(event_fn))
     e = one_or_error(e)
 
     provider = DataProvider.load(filename='request.yaml')
     for array_id in provider.use:
-        directory = pjoin('array_data', array_id)
+        directory = pjoin(array_data, array_id)
         station = model.load_stations(pjoin(directory, 'array_center.pf'))
         station = one_or_error(station)
         configid = store_creator.propose_store(station, e, superdir=args.store_dir,
@@ -111,25 +116,28 @@ def propose_stores(args):
                                                source_depth_delta=args.sddelta,
                                                sample_rate=args.sample_rate,
                                                force_overwrite=args.force_overwrite)
-        provider.store_mapping[station] = configid
+        store_mapper.mapping[array_id] = configid
 
+    store_mapper.dump(filename='store_mapping.yaml')
 
 def process(args):
-    from guesstimate_depth_v02.py import PlotSettings, plot
+    from guesstimate_depth_v02 import PlotSettings, plot
+
+    store_mapper = StoreMapper.load(filename='store_mapping.yaml')
 
     provider = DataProvider.load(filename='request.yaml')
-    if args.plot_settings:
+    if args.settings:
         settings = PlotSettings.load(filename=args.plot_settings)
     else:
         settings = PlotSettings.from_argument_parser(args)
 
-    subdir = pjoin(array_id, 'array_data')
     for array_id in provider.use:
+        subdir = pjoin(array_data, array_id)
         settings.trace_filename = pjoin(subdir, 'beam.mseed')
         settings.station_filename = pjoin(subdir, 'array_center.pf')
-        settings.store_id = provider.store_mapping[station]
+        settings.store_superdirs = [stores_superdir]
+        settings.store_id = store_mapper.mapping[array_id]
         plot(settings)
-
 
 
 if __name__=='__main__':
@@ -162,9 +170,6 @@ if __name__=='__main__':
                                 default=False)
 
     beam_parser = sp.add_parser('beam', help='Beam forming')
-    beam_parser.add_argument('--beam',
-                                help='run beamforming',
-                                action='store_true')
     beam_parser.add_argument('--map_filename', help='filename of map',
                             default='map.png')
     beam_parser.add_argument('--normalize',
@@ -206,7 +211,10 @@ if __name__=='__main__':
                                 action='store_false')
 
     process_parser = sp.add_parser('process', help='Create images')
-    process_parser.add_argument('--config',
+    process_parser.add_argument('--array_id',
+                                help='array_id to process',
+                                default=False)
+    process_parser.add_argument('--settings',
                                 help='settings file',
                                 default=False,
                                 required=False)
@@ -218,9 +226,10 @@ if __name__=='__main__':
     #process_parser.add_argument('--event',
     #                    help='name of file containing event catalog',
     #                    required=True)
-    #process_parser.add_argument('--store',
-    #                    help='name of store id',
-    #                    required=True)
+    process_parser.add_argument('--store',
+                        help='name of store id',
+                        dest='store_id',
+                        required=False)
     #process_parser.add_argument('--pick',
     #                    help='name of file containing p marker',
     #                    required=True)
@@ -230,7 +239,7 @@ if __name__=='__main__':
                         required=False)
     process_parser.add_argument('--depths',
                         help='testing depths in km. zstart:zstop:delta',
-                        default=0,
+                        default='0:15:1',
                         required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
@@ -276,5 +285,5 @@ if __name__=='__main__':
         beam(args)
 
     if args.cmd == 'process':
-        beam(args)
+        process(args)
 
