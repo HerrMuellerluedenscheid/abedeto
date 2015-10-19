@@ -55,9 +55,27 @@ def download(args, event=None, prefix=''):
         settings = args.download_settings
         provider.download(settings)
     else:
-        tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=100.)
-        tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=600.)
-        provider.download(event, timing=(tmin, tmax), prefix=prefix, dump_config=True)
+        if args.name:
+            logger.warn("Cannot use defined name if list of events. Will"
+                            " use event names instead")
+        for i_e, e in enumerate(ev):
+            if e.name:
+                name = e.name
+            else:
+                logger.warn("event name is empty. Skipping...")
+                continue
+
+            create_directory(name, args.force)
+            create_directory(name, args.force)
+
+            model.Event.dump_catalog([e], pjoin(name, 'event.pf'))
+            provider = DataProvider()
+            tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
+            tmax = CakeTiming(phase_selection='first(p|P|PP)+80', fallback_time=600.)
+            provider.download(e, timing=(tmin, tmax), prefix=name, dump_config=True)
+            logger.info('.'*30)
+            logger.info('Prepared project %s for you' % name)
+
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
@@ -76,6 +94,10 @@ def beam(args):
                    fn_dump_center=pjoin(directory, 'array_center.pf'),
                    fn_beam=pjoin(directory, 'beam.mseed'),
                    station=array_id)
+        if args.plot:
+            bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
+
+
 
         array_centers.append(bf.station_c)
 
@@ -98,6 +120,7 @@ def propose_stores(args):
                                     source_depth_delta=args.sddelta,
                                     sample_rate=args.sample_rate,
                                     force_overwrite=args.force_overwrite)
+
 
 def process(args):
     raise Exception('Not implemented')
@@ -142,6 +165,12 @@ if __name__=='__main__':
                             help='normlize by standard deviation of trace',
                             action='store_true',
                             default=True)
+                            action='store_true')
+    group_beam.add_argument('--plot',
+                            help='create plots showing stations and store them '
+                            'in sub-directories',
+                            action='store_true',
+                            default=False)
 
 
     group_store = parser.add_argument_group('Create stores')
@@ -187,17 +216,4 @@ if __name__=='__main__':
 
     if args.beam:
         beam(args)
-
-    # init
-    # -download data, store download infos in subdir
-
-    # getagain
-    # first modify get options
-    # run getagain
-
-    # storify
-    # create possible stores
-
-    # process
-
 
