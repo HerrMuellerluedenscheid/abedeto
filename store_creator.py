@@ -96,7 +96,7 @@ def propose_store(station, event, superdir, source_depth_min=0., source_depth_ma
     config.validate()
     Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
 
-    return dest_dir
+    return configid
 
 
 
