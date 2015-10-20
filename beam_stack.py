@@ -95,13 +95,12 @@ class BeamForming(Object):
                 elif b<0.:
                     self.bazi = 360.+bb
                 self.slow = ray.p/(cake.r2d*cake.d2m)
-                print 'CHECK SLOWNESS!: ', self.slow, dist
         else:
             self.bazi = bazi
             self.slow = slow
         
         logger.info('stacking %s with slowness %1.4f s/km at back azimut %1.1f '
-                    'degrees' %('.'.join(c_station_id), self.slow/cake.km, self.bazi))
+                    'degrees' %('.'.join(c_station_id), self.slow*cake.km, self.bazi))
 
         lat0 = num.array([lat_c]*len(stations))
         lon0 = num.array([lon_c]*len(stations))
