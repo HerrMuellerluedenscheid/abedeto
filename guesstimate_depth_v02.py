@@ -9,10 +9,11 @@ from pyrocko import io
 from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
-from pyrocko.gf import DCSource, Target, LocalEngine
+from pyrocko.gf import DCSource, Target, LocalEngine, seismosizer, meta
 from pyrocko.util import str_to_time
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
+from pyrocko import orthodrome as ortho
 km = 1000.
 
 logger = logging.getLogger('guesstimate')
@@ -43,6 +44,9 @@ class PlotSettings(Object):
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
     # do I need this, here?
     save_as = String.T(default='depth_estimate.png', help='filename')
+    force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
+                                  'applies only laterally!',
+                                  default=False)
     auto_caption = Bool.T(help='add a caption giving basic information. Needs '
                                'implementation.',
                           default=False)
@@ -146,7 +150,8 @@ if __name__=='__main__':
                         help='if true, do not plot recorded and the assigned synthetic trace on top of each other',
                         action='store_true',
                         required=False)
-    parser.add_argument('--out_filename',
+    parser.add_argument('--save-as',
+                        dest='save_as',
                         help='file to store image',
                         required=False)
     parser.add_argument('--print_parameters',
@@ -170,7 +175,7 @@ if __name__=='__main__':
     settings = PlotSettings().from_arguement_parser(args)
 
 
-def plot(settings):
+def plot(settings, show=False):
 
     # use test depth:
     # sind das die richtigen strike dip rake kobinationen?
@@ -208,9 +213,37 @@ def plot(settings):
         e = LocalEngine(store_superdirs=settings.store_superdirs)
     else:
         e = LocalEngine(use_config=True)
+    store = e.get_store(settings.store_id)
     station = model.load_stations(settings.station_filename)
-    targets = [station_to_target(station[0], quantity=quantity, store_id=settings.store_id)]
-    request = e.process(targets=targets, sources=test_sources)
+    assert len(station) == 1
+    station = station[0] 
+    targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
+    try:
+        request = e.process(targets=targets, sources=test_sources)
+    except seismosizer.NoSuchStore as e:
+        logger.warning('%s ... skipping.' % e)
+        return
+    except meta.OutOfBounds as error:
+        if not settings.force_nearest_neighbor:
+            raise error
+        else:
+            logger.warning('%s  Using nearest neighbor instead.' % error)
+            mod_targets = []
+            for t in targets:
+                closest_source = min(test_sources, key=lambda s: s.distance_to(t))
+                farthest_source = max(test_sources, key=lambda s: s.distance_to(t))
+                min_dist_delta = store.config.distance_min - closest_source.distance_to(t)
+                max_dist_delta = store.config.distance_max - farthest_source.distance_to(t)
+                if min_dist_delta < 0:
+                    azi, bazi = closest_source.azibazi_to(t)
+                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, min_dist_delta*cake.m2d)
+                elif max_dist_delta < 0:
+                    azi, bazi = farthest_source.azibazi_to(t)
+                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, max_dist_delta*cake.m2d)
+                t.lat, t.lon = newlat, newlon
+                mod_targets.append(t)
+            request = e.process(targets=mod_targets, sources=test_sources)
+
     alldepths = list(test_depths)
     depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
 
@@ -234,15 +267,14 @@ def plot(settings):
             tr = tr.transfer(transfer_function=diff_response, tfade=20, freqlimits=(0.1, 0.2, 10., 20.))
 
         ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
-        onset = e.get_store(t.store_id).t('P', (s.depth, s.distance_to(t)))
-        store = e.get_store(settings.store_id)
+        #onset = e.get_store(t.store_id).t('begin', (s.depth, s.distance_to(t)))
         mod = store.config.earthmodel_1d
-        #onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
-        #                              distances=[s.distance_to(t)*cake.m2d],
-        #                              zstart=s.depth)[0].t
+        onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
+                                      distances=[s.distance_to(t)*cake.m2d],
+                                      zstart=s.depth)[0].t
         ydata = tr.get_ydata()
         for f in settings.filters:
-            tr = tr.transfer(transfer_function=f, tfade=10)
+            tr = tr.transfer(transfer_function=f, tfade=10, cut_off_fading=False)
         if settings.normalize:
             ydata = ydata/num.max(abs(ydata))
             ax.tick_params(axis='y',
@@ -286,8 +318,6 @@ def plot(settings):
             correction = float(settings.onset_correction)
         except KeyError:
             correction = 0
-        #marker = load_markers(args.pick)[0]
-        #ponset = marker.tmin
 
         if quantity=='displacement':
             integration_response = IntegrationResponse()
@@ -300,6 +330,11 @@ def plot(settings):
             tr = tr.transfer(transfer_function=f, tfade=10)
 
         #tr.bandpass(**bandpass)
+        arrivals = mod.arrivals(phases=[cake.PhaseDef('P')], 
+                                  distances=[ortho.distance_accurate50m(station, event)*cake.m2d],
+                                  zstart=event.depth)
+        #marker = load_markers(args.pick)[0]
+        ponset = arrivals[0].t + event.time
         ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
         ydata = tr.get_ydata()
         if settings.normalize:
@@ -325,7 +360,9 @@ def plot(settings):
     bottom = 0.1
     plt.subplots_adjust(hspace=-.4,
                         bottom=bottom)
-    if settings.out_filename:
-        fig.savefig(settings.out_filename)
-    #plt.show()
+    if settings.save_as:
+        logger.info('save as: %s ' % settings.save_as)
+        fig.savefig(settings.save_as)
+    if show:
+        plt.show()
 
