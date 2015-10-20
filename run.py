@@ -69,7 +69,7 @@ def download(args, event=None, prefix=''):
         provider = DataProvider()
         tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
         tmax = CakeTiming(phase_selection='first(p|P|PP)+120', fallback_time=600.)
-        provider.download(e, timing=(tmin, tmax), prefix='', dump_config=True)
+        provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True)
 
 
 def beam(args):
@@ -137,8 +137,17 @@ def process(args):
         settings.station_filename = pjoin(subdir, 'array_center.pf')
         settings.store_superdirs = [stores_superdir]
         settings.store_id = store_mapper.mapping[array_id]
-        plot(settings)
+        settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
+        settings.force_nearest_neighbor = args.force_nearest_neighbor
+        plot(settings, show=args.show)
 
+def get_bounds(args):
+    from get_bounds import get_bounds
+
+    e = list(model.Event.load_catalog(args.events))
+    directory = pjoin('array_data', args.array_id)
+    stations = model.load_stations(pjoin(directory, 'array_center.pf'))
+    get_bounds(stations, events=e, show_fig=True, km=True)
 
 if __name__=='__main__':
     import argparse
@@ -259,8 +268,19 @@ if __name__=='__main__':
                         help='normalize traces to 1',
                         action='store_true',
                         required=False)
-    process_parser.add_argument('--skip_true',
+    process_parser.add_argument('--skip-true',
                         help='if true, do not plot recorded and the assigned synthetic trace on top of each other',
+                        dest='skip_true',
+                        action='store_true',
+                        required=False)
+    process_parser.add_argument('--show',
+                        help='show matplotlib plots after each step',
+                        action='store_true',
+                        required=False)
+    process_parser.add_argument('--force-nearest-neighbor',
+                        help='handles OOB',
+                        dest='force_nearest_neighbor',
+                        default=False,
                         action='store_true',
                         required=False)
     #process_parser.add_argument('--out_filename',
@@ -269,6 +289,17 @@ if __name__=='__main__':
     process_parser.add_argument('--print_parameters',
                         help='creates a text field giving the used parameters',
                         required=False)
+
+    bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
+                                  'Helpful when generating stores for entire catalogs.')
+    bounds_parser.add_argument('--events',
+                        help='events filename',
+                        required=True)
+
+    bounds_parser.add_argument('--array-id',
+                        help='array id',
+                        dest='array_id',
+                        required=True)
 
     args = parser.parse_args()
 
@@ -286,4 +317,7 @@ if __name__=='__main__':
 
     if args.cmd == 'process':
         process(args)
+
+    if args.cmd == 'bounds':
+        get_bounds(args)
 
