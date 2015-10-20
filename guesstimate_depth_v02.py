@@ -213,7 +213,11 @@ def plot(settings, show=False):
         e = LocalEngine(store_superdirs=settings.store_superdirs)
     else:
         e = LocalEngine(use_config=True)
-    store = e.get_store(settings.store_id)
+    try:
+        store = e.get_store(settings.store_id)
+    except seismosizer.NoSuchStore as e:
+        logger.warning('%s ... skipping.' % e)
+        return
     station = model.load_stations(settings.station_filename)
     assert len(station) == 1
     station = station[0] 
@@ -286,9 +290,9 @@ def plot(settings, show=False):
         ax.plot(tr.get_xdata()-s.time-onset, ydata)
         ax.set_xlim(zoom_window)
         #if not args.no_y_axis:
-        #    ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
-        #            transform=ax.transAxes,
-        #            horizontalalignment='right')
+        ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.axes.patch.set_visible(False)
         if True:
             arrivals = mod.arrivals(phases=[cake.PhaseDef('pP')], 
@@ -347,9 +351,9 @@ def plot(settings, show=False):
 
         ax.plot(tr.get_xdata()-ponset+correction, ydata, c='black', linewidth=2)
         #if not args.no_y_axis:
-        #    ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
-        #            transform=ax.transAxes,
-        #            horizontalalignment='right')
+        ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.axes.get_xaxis().set_visible(False)
         ax.axes.patch.set_visible(False)
         for item in ax.spines.values():
