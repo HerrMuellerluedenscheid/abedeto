@@ -19,7 +19,8 @@ logging.basicConfig(level="INFO")
 logger = logging.getLogger("propose-store")
 
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
-                  source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2):
+                  source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2,
+                  run_ttt=False):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
     :param station: Station instance
@@ -28,7 +29,8 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
     :param source_depth_max: maximum source deoth (default 15)
     :param source_depth_delta: increment
     :param sample_rate: in Hz
-    :param force_overwrite: overwrite potentially existent store'''
+    :param force_overwrite: overwrite potentially existent store
+    :param run_ttt: generate travel time tables right away'''
     modelling_code_id = 'qseis.2006a'
 
     earthmodels_1d = {}
@@ -67,7 +69,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         mod = cake.load_model(crust2_profile=prof)
         configid += '%s' % ident
         setattr(config, 'earthmodel_1d', mod)
-        configs.append(_config)
+        configs.append(config)
         config.id = configid
         dest_dir = pjoin(superdir, config.id) 
         create_directory(dest_dir, force_overwrite)
@@ -102,11 +104,16 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         qs.time_region = (Timing('begin-%s' % (half_lapse_time*1.1)), Timing('begin+%s' % (half_lapse_time*1.1)))
         qs.cut = (Timing('begin-%s' % half_lapse_time), Timing('begin+%s' % half_lapse_time))
         qs.slowness_window = (0., 0., slow+slow*0.3, slow+slow*0.5)
+        qs.wavelet_duration_samples = 0.001
+        qs.sw_flat_earth_transform = 1
         qs.filter_shallow_paths = 1
         qs.filter_shallow_paths_depth = round(mean_dist/50000.)
         qs.validate()
         config.validate()
         Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
+        if run_ttt:
+            st = Store(dest_dir)
+            st.make_ttt()
 
     config_ids = [c.id for c in configs]
     return config_ids
