@@ -36,13 +36,16 @@ def one_2_list(items):
 
 
 def init(args):
-    events = model.Event.load_catalog(args.events)
+    events = list(model.Event.load_catalog(args.events))
     if args.name and len(events)>1:
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
     for i_e, e in enumerate(events):
         if e.name:
             name = e.name
+        elif args.name:
+            name = args.name
+            e.name = name
         else:
             logger.warn("event name is empty. Skipping...")
             continue
@@ -101,21 +104,26 @@ def beam(args):
     #map.save(args.map_filename)
 
 def propose_stores(args):
+    from get_bounds import get_bounds
     store_mapper = StoreMapper()
-    e = list(model.Event.load_catalog(event_fn))
-    e = one_or_error(e)
+    if args.events:
+        events = list(model.Event.load_catalog(args.events))
+    else:
+        events = list(model.Event.load_catalog(event_fn))
 
     provider = DataProvider.load(filename='request.yaml')
     for array_id in provider.use:
         directory = pjoin(array_data, array_id)
         station = model.load_stations(pjoin(directory, 'array_center.pf'))
         station = one_or_error(station)
-        configid = store_creator.propose_store(station, e, superdir=args.store_dir,
+        configid = store_creator.propose_store(station, events, superdir=args.store_dir,
                                                source_depth_min=args.sdmin,
                                                source_depth_max=args.sdmax,
                                                source_depth_delta=args.sddelta,
                                                sample_rate=args.sample_rate,
                                                force_overwrite=args.force_overwrite)
+        assert len(configid)==1
+        configid = configid[0]
         store_mapper.mapping[array_id] = configid
 
     store_mapper.dump(filename='store_mapping.yaml')
@@ -126,19 +134,25 @@ def process(args):
     store_mapper = StoreMapper.load(filename='store_mapping.yaml')
 
     provider = DataProvider.load(filename='request.yaml')
-    if args.settings:
-        settings = PlotSettings.load(filename=args.plot_settings)
-    else:
-        settings = PlotSettings.from_argument_parser(args)
+    #if args.settings:
+    #    settings = PlotSettings.load(filename=args.plot_settings)
+    #else:
 
     for array_id in provider.use:
+
         subdir = pjoin(array_data, array_id)
-        settings.trace_filename = pjoin(subdir, 'beam.mseed')
-        settings.station_filename = pjoin(subdir, 'array_center.pf')
-        settings.store_superdirs = [stores_superdir]
-        settings.store_id = store_mapper.mapping[array_id]
-        settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
-        settings.force_nearest_neighbor = args.force_nearest_neighbor
+        settings_fn = pjoin(subdir, 'plot_settings.yaml')
+        if os.path.isfile(settings_fn) and not args.overwrite_settings:
+            settings = PlotSettings.load(filename=pjoin(settings_fn))
+        else:
+            settings = PlotSettings.from_argument_parser(args)
+            settings.trace_filename = pjoin(subdir, 'beam.mseed')
+            settings.station_filename = pjoin(subdir, 'array_center.pf')
+            settings.store_superdirs = [stores_superdir]
+            settings.store_id = store_mapper.mapping[array_id]
+            settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
+            settings.force_nearest_neighbor = args.force_nearest_neighbor
+            settings.dump(filename=settings_fn)
         plot(settings, show=args.show)
 
 def get_bounds(args):
@@ -152,9 +166,11 @@ def get_bounds(args):
 if __name__=='__main__':
     import argparse
 
-    parser = argparse.ArgumentParser('What was the depth, again?', add_help=True)
+    parser = argparse.ArgumentParser('What was the depth, again?', add_help=False)
+    parser.add_argument('--log', required=False, default='INFO')
+
     sp = parser.add_subparsers(dest='cmd')
-    init_parser = sp.add_parser('init', help='create a new project')
+    init_parser = sp.add_parser('init', help='create a new project')#, parents=[parser])
     init_parser.add_argument('--events',
                              help='Event you don\'t know the depth of',
                              required=True)
@@ -168,7 +184,7 @@ if __name__=='__main__':
                             default=False,
                             help='force overwrite')
 
-    download_parser = sp.add_parser('download', help='Download data')
+    download_parser = sp.add_parser('download', help='Download data')#, parents=[parser])
     download_parser.add_argument('--download',
                                 help='download available data',
                                 default=False,
@@ -178,7 +194,7 @@ if __name__=='__main__':
                                 dest='download_settings',
                                 default=False)
 
-    beam_parser = sp.add_parser('beam', help='Beam forming')
+    beam_parser = sp.add_parser('beam', help='Beam forming')#, parents=[parser])
     beam_parser.add_argument('--map_filename', help='filename of map',
                             default='map.png')
     beam_parser.add_argument('--normalize',
@@ -191,37 +207,35 @@ if __name__=='__main__':
                             action='store_true',
                             default=False)
 
-
-    store_parser = sp.add_parser('stores', help='Propose GF stores')
-
+    store_parser = sp.add_parser('stores', help='Propose GF stores')#, parents=[parser])
     store_parser.add_argument('--super-dir',
                                 dest='store_dir',
                                 help='super directory where to search/create stores',
                                 default='stores')
-    store_parser.add_argument('--source-depth-min',
-                                dest='sdmin',
+    store_parser.add_argument('--source-depth-min', dest='sdmin', type=float,
                                 help='minimum source depth of store [km]. Default 0',
                                 default=0.)
-    store_parser.add_argument('--source-depth-max',
-                                dest='sdmax',
+    store_parser.add_argument('--source-depth-max', dest='sdmax', type=float,
                                 help='minimum source depth of store [km]. Default 15',
                                 default=15.)
-    store_parser.add_argument('--source-depth-delta',
-                                dest='sddelta',
+    store_parser.add_argument('--source-depth-delta', dest='sddelta', type=float,
                                 help='delte source depth of store [km]. Default 1',
                                 default=1.)
-    store_parser.add_argument('--sampling-rate',
-                                dest='sample_rate',
+    store_parser.add_argument('--sampling-rate', dest='sample_rate', type=float,
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
     store_parser.add_argument('--force-store',
                                 dest='force_overwrite',
                                 help='overwrite existent stores',
                                 action='store_false')
+    store_parser.add_argument('--events',
+                                dest='events',
+                                help='create stores that are suitable for all events in this file')
 
-    process_parser = sp.add_parser('process', help='Create images')
+    process_parser = sp.add_parser('process', help='Create images')#, parents=[parser])
     process_parser.add_argument('--array_id',
                                 help='array_id to process',
+                                required=False,
                                 default=False)
     process_parser.add_argument('--settings',
                                 help='settings file',
@@ -286,12 +300,15 @@ if __name__=='__main__':
     #process_parser.add_argument('--out_filename',
     #                    help='file to store image',
     #                    required=False)
-    process_parser.add_argument('--print_parameters',
+    process_parser.add_argument('--print-parameters', dest='print_parameters',
                         help='creates a text field giving the used parameters',
                         required=False)
+    process_parser.add_argument('--overwrite-settings', dest='overwrite_settings',
+                        help='overwrite former settings files', default=False,
+                        action='store_true', required=False)
 
     bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
-                                  'Helpful when generating stores for entire catalogs.')
+                                  'Helpful when generating stores for entire catalogs.')#, parents=[parser])
     bounds_parser.add_argument('--events',
                         help='events filename',
                         required=True)
@@ -302,6 +319,8 @@ if __name__=='__main__':
                         required=True)
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=args.log.upper())
 
     if args.cmd == 'init':
         init(args)
