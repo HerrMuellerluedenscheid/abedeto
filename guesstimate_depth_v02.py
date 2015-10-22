@@ -50,7 +50,7 @@ class PlotSettings(Object):
     auto_caption = Bool.T(help='add a caption giving basic information. Needs '
                                'implementation.',
                           default=False)
-    title = String.T(default='%{array_id}s - %{event_name}s', help='Add default title.')
+    title = String.T(default='%(array_id)s - %(event_name)s', help='Add default title.')
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
 
@@ -210,11 +210,11 @@ def plot(settings, show=False):
         test_sources.append(s)
 
     if settings.store_superdirs:
-        e = LocalEngine(store_superdirs=settings.store_superdirs)
+        engine = LocalEngine(store_superdirs=settings.store_superdirs)
     else:
-        e = LocalEngine(use_config=True)
+        engine = LocalEngine(use_config=True)
     try:
-        store = e.get_store(settings.store_id)
+        store = engine.get_store(settings.store_id)
     except seismosizer.NoSuchStore as e:
         logger.warning('%s ... skipping.' % e)
         return
@@ -223,7 +223,7 @@ def plot(settings, show=False):
     station = station[0] 
     targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
     try:
-        request = e.process(targets=targets, sources=test_sources)
+        request = engine.process(targets=targets, sources=test_sources)
     except seismosizer.NoSuchStore as e:
         logger.warning('%s ... skipping.' % e)
         return
@@ -246,7 +246,7 @@ def plot(settings, show=False):
                     newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, max_dist_delta*cake.m2d)
                 t.lat, t.lon = newlat, newlon
                 mod_targets.append(t)
-            request = e.process(targets=mod_targets, sources=test_sources)
+            request = engine.process(targets=mod_targets, sources=test_sources)
 
     alldepths = list(test_depths)
     depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
@@ -271,14 +271,14 @@ def plot(settings, show=False):
             tr = tr.transfer(transfer_function=diff_response, tfade=20, freqlimits=(0.1, 0.2, 10., 20.))
 
         ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
-        #onset = e.get_store(t.store_id).t('begin', (s.depth, s.distance_to(t)))
+        onset = engine.get_store(t.store_id).t('begin', (s.depth, s.distance_to(t)))
         mod = store.config.earthmodel_1d
-        onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
-                                      distances=[s.distance_to(t)*cake.m2d],
-                                      zstart=s.depth)[0].t
+        #onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
+        #                              distances=[s.distance_to(t)*cake.m2d],
+        #                              zstart=s.depth)[0].t
         ydata = tr.get_ydata()
         for f in settings.filters:
-            tr = tr.transfer(transfer_function=f, tfade=10, cut_off_fading=False)
+            tr = tr.transfer(transfer_function=f, tfade=20, cut_off_fading=False)
         if settings.normalize:
             ydata = ydata/num.max(abs(ydata))
             ax.tick_params(axis='y',
@@ -299,14 +299,18 @@ def plot(settings, show=False):
                                       distances=[s.distance_to(t)*cake.m2d],
                                       zstart=s.depth)
 
-            t = arrivals[0].t
-            ydata_absmax = num.max(num.abs(ydata))
-            marker_length = 0.5
-            ax.plot([t-onset]*2,
-                    [-ydata_absmax*marker_length, ydata_absmax*marker_length],
-                    linewidth=1, 
-                    c='red')
-            print arrivals
+            try:
+                t = arrivals[0].t
+                ydata_absmax = num.max(num.abs(ydata))
+                marker_length = 0.5
+                ax.plot([t-onset]*2,
+                        [-ydata_absmax*marker_length, ydata_absmax*marker_length],
+                        linewidth=1, c='red')
+            except IndexError:
+                logger.warning('no pP phase at d=%s z=%s stat=%s' % (s.distance_to(t)*cake.m2d,
+                                                                     s.depth, station.station))
+                pass
+
         if s.depth==max(test_depths):
             ax.xaxis.set_ticks_position('bottom')
             for pos in ['left', 'top','right']:
@@ -331,14 +335,14 @@ def plot(settings, show=False):
         #if notch:
         #    notch_filter(tr, 2*num.pi*notch, 1.5)
         for f in settings.filters:
-            tr = tr.transfer(transfer_function=f, tfade=10)
+            tr = tr.transfer(transfer_function=f, tfade=20, cut_off_fading=False)
 
         #tr.bandpass(**bandpass)
-        arrivals = mod.arrivals(phases=[cake.PhaseDef('P')], 
-                                  distances=[ortho.distance_accurate50m(station, event)*cake.m2d],
-                                  zstart=event.depth)
-        #marker = load_markers(args.pick)[0]
-        ponset = arrivals[0].t + event.time
+        ponset = engine.get_store(targets[0].store_id).t('begin', (event.depth, s.distance_to(targets[0]))) + event.time
+        #arrivals = mod.arrivals(phases=[cake.PhaseDef('P')], 
+        #                          distances=[ortho.distance_accurate50m(station, event)*cake.m2d],
+        #                          zstart=event.depth)
+        #ponset = arrivals[0].t + event.time
         ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
         ydata = tr.get_ydata()
         if settings.normalize:
@@ -359,8 +363,9 @@ def plot(settings, show=False):
         for item in ax.spines.values():
             item.set_visible(False)
         ax.set_xlim(zoom_window)
-    #if settings.title:
-    #    fig.suptitle(args.title)
+    if settings.title:
+        params = {'array_id': '.'.join(station.nsl()), 'event_name':event.name}
+        fig.suptitle(settings.title % params)
     bottom = 0.1
     plt.subplots_adjust(hspace=-.4,
                         bottom=bottom)
