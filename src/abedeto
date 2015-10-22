@@ -179,9 +179,7 @@ if __name__=='__main__':
 
     sp = parser.add_subparsers(dest='cmd')
     init_parser = sp.add_parser('init', help='create a new project')#, parents=[parser])
-    init_parser.add_argument('--events',
-                             help='Event you don\'t know the depth of',
-                             required=True)
+    init_parser.add_argument('events', help='Event you don\'t know the depth of')
     init_parser.add_argument('--name', help='name')
     init_parser.add_argument('--download',
                             action='store_true',
