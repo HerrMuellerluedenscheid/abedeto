@@ -35,12 +35,15 @@ class MapParameters(Object):
     events = List.T(model.Event.T(), optional=True)
 
 
-def make_map(lat, lon, radius, outfn, stations=None, events=None, stations_label_mapping=None, map_parameters=None):
-    map = automap.Map(
-        width=width,
-        height=height,
-        lat=lat,
-        lon=lon,
+def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=None, stations_label_mapping=None, map_parameters=None):
+    if map_parameters:
+        width =map_parameters.width
+        height=map_parameters.height
+        lat=map_parameters.lat
+        lon=map_parameters.lon
+        radius=map_parameters.radius
+
+    map = automap.Map( width=width, height=height, lat=lat, lon=lon,
         radius=radius,
         topo_resolution_max=200,
         topo_resolution_min=40.,
@@ -94,3 +97,6 @@ def make_map(lat, lon, radius, outfn, stations=None, events=None, stations_label
 
     map.save(outfn)
 
+if __name__=='__main__':
+    params = MapParameters(lat=10, lon=10, radius=10, outfn='test-map.pdf')
+    make_map(map_parameters=params)
