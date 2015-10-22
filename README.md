@@ -23,6 +23,10 @@ Changing into one of the created project directories and running
 
 should start querying the IRIS data center for available array data.
 
+*Abedeto* can beamforming. Run
+
+    abedeto beam
+
 You can let *abedeto* propose suitable greens function stores based on Crust2.0 profiles by running
 
     abedeto stores
