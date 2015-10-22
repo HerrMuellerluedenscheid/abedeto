@@ -9,6 +9,7 @@ from request import DataProvider, CakeTiming
 import store_creator
 import logging
 from array_map import ArrayMap
+import matplotlib.pyplot as plt
 
 
 pjoin = os.path.join
@@ -139,12 +140,10 @@ def process(args):
     store_mapper = StoreMapper.load(filename='store_mapping.yaml')
 
     provider = DataProvider.load(filename='request.yaml')
-    #if args.settings:
-    #    settings = PlotSettings.load(filename=args.plot_settings)
-    #else:
 
     for array_id in provider.use:
-
+        if args.array_id and array_id != args.array_id:
+            continue
         subdir = pjoin(array_data, array_id)
         settings_fn = pjoin(subdir, 'plot_settings.yaml')
         if os.path.isfile(settings_fn) and not args.overwrite_settings:
@@ -157,8 +156,11 @@ def process(args):
             settings.store_id = store_mapper.mapping[array_id]
             settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
             settings.force_nearest_neighbor = args.force_nearest_neighbor
+            settings.onset_correction = args.correction
             settings.dump(filename=settings_fn)
-        plot(settings, show=args.show)
+        plot(settings)
+    if args.show:
+        plt.show()
 
 def get_bounds(args):
     from get_bounds import get_bounds
@@ -278,7 +280,7 @@ if __name__=='__main__':
                         default="0.7:4.5",
                         required=False)
     process_parser.add_argument('--correction',
-                        help='correction in time [s]',
+                        help='a global correction in time [s]',
                         default=0,
                        required=False)
 
