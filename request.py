@@ -233,10 +233,15 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser(description='download waveforms')
     parser.add_argument('--events', help='event file. uses only first event in list!')
+    parser.add_argument('--site', help='geofon|iris', default='iris')
+    parser.add_argument('--want', help='all|id1,id2,id3....', default='all')
     args = parser.parse_args()
     length = 1000.
     e = list(model.Event.load_catalog(args.events))[0]
-    provider = DataProvider(channels='*')
-    tmin = CakeTiming(phase_selection='first(p|P|PP)-40', fallback_time=0.001)
-    tmax = CakeTiming(phase_selection='first(p|P|PP)+40', fallback_time=1000.)
-    provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, site='geofon')
+    provider = DataProvider(channels='*Z')
+    tmin = CakeTiming(phase_selection='first(p|P|PP)-100', fallback_time=0.001)
+    tmax = CakeTiming(phase_selection='first(p|P|PP)+520', fallback_time=1000.)
+    want = args.want
+    if want!='all':
+        want = want.split(',')
+    provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, site=args.site, want=want)
