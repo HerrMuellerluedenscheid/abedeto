@@ -107,7 +107,7 @@ def beam(args):
     #map.save(args.map_filename)
 
 def propose_stores(args):
-    from get_bounds import get_bounds
+    from abedeto.get_bounds import get_bounds
     store_mapper = StoreMapper()
     if args.events:
         events = list(model.Event.load_catalog(args.events))
@@ -136,7 +136,7 @@ def propose_stores(args):
     store_mapper.dump(filename='store_mapping.yaml')
 
 def process(args):
-    from guesstimate_depth_v02 import PlotSettings, plot
+    from abedeto.guesstimate_depth_v02 import PlotSettings, plot
 
     store_mapper = StoreMapper.load(filename='store_mapping.yaml')
 
@@ -164,7 +164,7 @@ def process(args):
         plt.show()
 
 def get_bounds(args):
-    from get_bounds import get_bounds
+    from abedeto.get_bounds import get_bounds
 
     e = list(model.Event.load_catalog(args.events))
     directory = pjoin('array_data', args.array_id)
