@@ -20,7 +20,7 @@ logger = logging.getLogger("propose-store")
 
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
                   source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2,
-                  run_ttt=False):
+                  run_ttt=False, simplify=False):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
     :param station: Station instance
@@ -67,6 +67,8 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
             distance_delta = (config.distance_max-config.distance_min)/(numdists-1)
         config.distance_delta = distance_delta
         mod = cake.load_model(crust2_profile=prof)
+        if simplify:
+            mod = mod.simplify(max_rel_error=0.002)
         configid += '%s' % ident
         setattr(config, 'earthmodel_1d', mod)
         configs.append(config)
