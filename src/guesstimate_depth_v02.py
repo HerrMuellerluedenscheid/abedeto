@@ -34,8 +34,7 @@ class PlotSettings(Object):
     store_superdirs = List.T(String.T(), optional=True)
     depth = Float.T(help='Depth [km] where to put the trace.')
     depths = String.T(help='Synthetic source depths [km]. start:stop:delta. '
-                      'default: 0:15:1',
-                      optional=True, default='0:15:1')
+                      'default: 0:15:1', optional=True, default='0:15:1')
     filters = List.T(FrequencyResponse.T(help='List of filters used to filter '
                                          'the traces'))
     zoom = List.T(Float.T(), help='Window to visualize with reference to the P '
@@ -176,7 +175,8 @@ if __name__=='__main__':
 
 
 def plot(settings, show=False):
-
+    
+    align_phase = 'P(cmb)P<(icb)(cmb)p'
     # use test depth:
     # sind das die richtigen strike dip rake kobinationen?
     # zeitbereich, den man betrachten moechte relativ zur p phase
@@ -260,6 +260,7 @@ def plot(settings, show=False):
     if len(targets)==1:
         axs = [axs]
 
+    print t.codes
     for s, t, tr in request.iter_results():
         #if s.depth == base_source.depth and args.skip_true:
         #    continue
@@ -287,15 +288,17 @@ def plot(settings, show=False):
                            right='off',
                            labelleft='off')
 
-        ax.plot(tr.get_xdata()-s.time-onset, ydata)
-        ax.set_xlim(zoom_window)
+        print 'source time', s.time
+        #ax.plot(tr.get_xdata()-s.time-onset, ydata)
+        ax.plot(tr.get_xdata()-onset, ydata)
+        #ax.set_xlim(zoom_window)
         #if not args.no_y_axis:
         ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
                 transform=ax.transAxes,
                 horizontalalignment='right')
         ax.axes.patch.set_visible(False)
-        if True:
-            arrivals = mod.arrivals(phases=[cake.PhaseDef('pP')], 
+        if False:
+            arrivals = mod.arrivals(phases=[cake.PhaseDef(align_phase)], 
                                       distances=[s.distance_to(t)*cake.m2d],
                                       zstart=s.depth)
 
@@ -331,6 +334,7 @@ def plot(settings, show=False):
             integration_response = IntegrationResponse()
             tr = tr.transfer(transfer_function=integration_response,
                              tfade=20,
+                             cut_off_fading=True,
                              freqlimits=(0.10, 0.2, 10., 20.))
         #if notch:
         #    notch_filter(tr, 2*num.pi*notch, 1.5)
@@ -347,10 +351,7 @@ def plot(settings, show=False):
         ydata = tr.get_ydata()
         if settings.normalize:
             ydata = ydata/max(abs(ydata))
-            ax.tick_params(axis='y',
-                           which='both',
-                           left='off',
-                           right='off',
+            ax.tick_params(axis='y', which='both', left='off', right='off',
                            labelleft='off')
 
         ax.plot(tr.get_xdata()-ponset+correction, ydata, c='black', linewidth=2)

@@ -1,14 +1,15 @@
+#!/usr/bin/env python 
+
 import os
-from request import DataProvider
-from beam_stack import BeamForming
+from abedeto.beam_stack import BeamForming
+import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
 from pyrocko.guts import Object, Dict, String
-from util import create_directory
-from request import DataProvider, CakeTiming
-import store_creator
+from abedeto.util import create_directory
+from abedeto.request import DataProvider, CakeTiming
 import logging
-from array_map import ArrayMap
+from abedeto.array_map import ArrayMap
 import matplotlib.pyplot as plt
 
 
