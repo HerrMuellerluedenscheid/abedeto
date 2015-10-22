@@ -19,6 +19,7 @@ logger = logging.getLogger('run')
 stores_superdir = 'stores'
 array_data = 'array_data'
 event_fn = 'event.pf'
+km = 1000.
 
 class StoreMapper(Object):
     mapping = Dict.T(String.T(), String.T())
@@ -116,12 +117,16 @@ def propose_stores(args):
         directory = pjoin(array_data, array_id)
         station = model.load_stations(pjoin(directory, 'array_center.pf'))
         station = one_or_error(station)
+        depths = args.depths.split(':')
+        sdmin, sdmax, sddelta = map(float, depths)
         configid = store_creator.propose_store(station, events, superdir=args.store_dir,
-                                               source_depth_min=args.sdmin,
-                                               source_depth_max=args.sdmax,
-                                               source_depth_delta=args.sddelta,
+                                               source_depth_min=sdmin,
+                                               source_depth_max=sdmax,
+                                               source_depth_delta=sddelta,
                                                sample_rate=args.sample_rate,
-                                               force_overwrite=args.force_overwrite)
+                                               force_overwrite=args.force_overwrite,
+                                               run_ttt=args.ttt,
+                                               simplify=args.simplify)
         assert len(configid)==1
         configid = configid[0]
         store_mapper.mapping[array_id] = configid
@@ -212,15 +217,7 @@ if __name__=='__main__':
                                 dest='store_dir',
                                 help='super directory where to search/create stores',
                                 default='stores')
-    store_parser.add_argument('--source-depth-min', dest='sdmin', type=float,
-                                help='minimum source depth of store [km]. Default 0',
-                                default=0.)
-    store_parser.add_argument('--source-depth-max', dest='sdmax', type=float,
-                                help='minimum source depth of store [km]. Default 15',
-                                default=15.)
-    store_parser.add_argument('--source-depth-delta', dest='sddelta', type=float,
-                                help='delte source depth of store [km]. Default 1',
-                                default=1.)
+    store_parser.add_argument('--depths', help='zmin:zmax:deltaz [km]', required=True)
     store_parser.add_argument('--sampling-rate', dest='sample_rate', type=float,
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
@@ -231,6 +228,14 @@ if __name__=='__main__':
     store_parser.add_argument('--events',
                                 dest='events',
                                 help='create stores that are suitable for all events in this file')
+    store_parser.add_argument('--ttt',
+                                dest='ttt',
+                                help='also generate travel time tables.',
+                                action='store_true')
+    store_parser.add_argument('--simplify',
+                                help='Simplify model to increase performance '
+                              'and in case of QSEIS lmax too small error.',
+                                action='store_true')
 
     process_parser = sp.add_parser('process', help='Create images')#, parents=[parser])
     process_parser.add_argument('--array_id',
@@ -261,7 +266,7 @@ if __name__=='__main__':
                         default=10.,
                         required=False)
     process_parser.add_argument('--depths',
-                        help='testing depths in km. zstart:zstop:delta',
+                        help='testing depths in km. zstart:zstop:delta, default 0:15:1',
                         default='0:15:1',
                         required=False)
     process_parser.add_argument('--quantity',
@@ -272,10 +277,10 @@ if __name__=='__main__':
                         help='4th order butterw. default: "0.7:4.5"',
                         default="0.7:4.5",
                         required=False)
-    #process_parser.add_argument('--correction',
-    #                    help='correction in time [s]',
-    #                    default=0,
-    #                   required=False)
+    process_parser.add_argument('--correction',
+                        help='correction in time [s]',
+                        default=0,
+                       required=False)
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
