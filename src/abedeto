@@ -250,9 +250,9 @@ if __name__=='__main__':
     #process_parser.add_argument('--event',
     #                    help='name of file containing event catalog',
     #                    required=True)
-    process_parser.add_argument('--store-superdir',
+    process_parser.add_argument('--store-superdirs',
                         help='super directory where to look for stores',
-                        dest='store_superdir',
+                        dest='store_superdirs', nargs='*',
                         required=False)
     process_parser.add_argument('--store',
                         help='name of store id',
@@ -273,9 +273,8 @@ if __name__=='__main__':
     process_parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
                         required=False)
-    process_parser.add_argument('--correction',
-                        help='a global correction in time [s]',
-                                required=False)
+    process_parser.add_argument('--correction', required=False,
+                        help='a global correction in time [s]')
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',

@@ -38,7 +38,7 @@ class PlotSettings(Object):
                                          'the traces'))
     zoom = List.T(Float.T(), help='Window to visualize with reference to the P '
                   'phase onset [s].', default=[-7, 15])
-    onset_correction = Float.T(help='time shift, to move beam trace.', default=0.)
+    correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
     save_as = String.T(default='depth_estimate.png', help='filename')
     force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
@@ -64,7 +64,7 @@ class PlotSettings(Object):
             pass
 
         for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-                    'onset_correction', 'store_superdirs', 'depth', 'depths']:
+                    'correction', 'store_superdirs', 'depth', 'depths']:
             try:
                 val = getattr(args, arg)
                 if val:
@@ -87,12 +87,13 @@ class PlotSettings(Object):
 
         kwargs = {}
         for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-                    'onset_correction', 'store_superdirs', 'depth', 'depths']:
+                    'correction', 'store_superdirs', 'depth', 'depths', 'correction']:
             try:
-                kwargs.update({arg: getattr(args, arg)})
+                val = getattr(args, arg)
+                if val:
+                    kwargs.update({arg: val})
             except AttributeError:
                 logger.debug('%s not defined' % arg)
-                #kwargs.update({arg: None})
                 continue
 
         return cls(filters=filters,
@@ -267,7 +268,7 @@ def plot(settings, show=False):
                 item.set_visible(False)
 
     for tr in traces:
-        correction = float(settings.onset_correction)
+        correction = float(settings.correction)
         if quantity=='displacement':
             tr = integrate_differentiate(tr, 'integrate')
         tr = settings.do_filter(tr)
@@ -342,7 +343,7 @@ if __name__=='__main__':
                         required=False)
     parser.add_argument('--correction',
                         help='correction in time [s]',
-                        dest='onset_correction',
+                        dest='correction',
                         default=0,
                         required=False)
     parser.add_argument('--normalize',
