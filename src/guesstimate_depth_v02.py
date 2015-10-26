@@ -29,10 +29,9 @@ class PlotSettings(Object):
                               'including the expected moment tensor.',
                               default='event.pf')
     store_id = String.T(help='Store ID to use for generating the synthetic '
-                        'traces.',
-                        optional=True)
+                        'traces.', optional=True)
     store_superdirs = List.T(String.T(), optional=True)
-    depth = Float.T(help='Depth [km] where to put the trace.')
+    depth = Float.T(help='Depth [km] where to put the trace.', default=10.)
     depths = String.T(help='Synthetic source depths [km]. start:stop:delta. '
                       'default: 0:15:1', optional=True, default='0:15:1')
     filters = List.T(FrequencyResponse.T(help='List of filters used to filter '
@@ -52,23 +51,51 @@ class PlotSettings(Object):
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
 
+
+    def update_from_args(self, args):
+        kwargs = {}
+        try:
+            hp, lp = args.filter.split(':')
+            filters = [
+                ButterworthResponse(corner=float(lp), order=4, type='low'),
+                ButterworthResponse(corner=float(hp), order=4, type='high')]
+            kwargs.update({'filters': filters})
+        except:
+            pass
+
+        for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
+                    'onset_correction', 'store_superdirs', 'depth', 'depths']:
+            try:
+                val = getattr(args, arg)
+                if val:
+                    kwargs.update({arg: val})
+            except AttributeError:
+                logger.debug('%s not defined' % arg)
+                continue
+        for arg, v in kwargs.items():
+            setattr(self, arg, v)
+
     @classmethod
     def from_argument_parser(cls, args):
-        hp, lp = args.filter.split(':')
+        try:
+            hp, lp = args.filter.split(':')
+        except AttributeError:
+            hp, lp = (0.7, 4.5)
         filters = [
             ButterworthResponse(corner=float(lp), order=4, type='low'),
             ButterworthResponse(corner=float(hp), order=4, type='high')]
+
         kwargs = {}
         for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-                    'onset_correction', 'store_superdirs']:
+                    'onset_correction', 'store_superdirs', 'depth', 'depths']:
             try:
                 kwargs.update({arg: getattr(args, arg)})
             except AttributeError:
                 logger.debug('%s not defined' % arg)
-                kwargs.update({arg: None})
-        return cls(depth=args.depth,
-                   depths=args.depths,
-                   filters=filters,
+                #kwargs.update({arg: None})
+                continue
+
+        return cls(filters=filters,
                    **kwargs)
 
     def do_filter(self, tr):
@@ -199,7 +226,7 @@ def plot(settings, show=False):
         onset = engine.get_store(t.store_id).t(
             'begin', (s.depth, s.distance_to(t)))
 
-        settings.do_filter(tr)
+        tr = settings.do_filter(tr)
         if settings.normalize:
             tr.set_ydata(tr.get_ydata()/num.max(abs(tr.get_ydata())))
             ax.tick_params(axis='y', which='both', left='off', right='off',
@@ -243,7 +270,7 @@ def plot(settings, show=False):
         correction = float(settings.onset_correction)
         if quantity=='displacement':
             tr = integrate_differentiate(tr, 'integrate')
-        settings.do_filter(tr)
+        tr = settings.do_filter(tr)
         ponset = engine.get_store(targets[0].store_id).t(
             'begin', (event.depth, s.distance_to(targets[0]))) + event.time
         ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
