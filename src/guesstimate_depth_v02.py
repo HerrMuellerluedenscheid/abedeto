@@ -267,7 +267,12 @@ def plot(settings, show=False):
             for item in ax.spines.values():
                 item.set_visible(False)
 
-    for tr in traces:
+    if len(traces)==0:
+        raise Exception('No Trace found!')
+    if len(traces)>1:
+        raise Exception('More then one trace provided!')
+    else:
+        tr = traces[0]
         correction = float(settings.correction)
         if quantity=='displacement':
             tr = integrate_differentiate(tr, 'integrate')
@@ -319,9 +324,9 @@ if __name__=='__main__':
                         dest='store_id',
                         help='name of store id',
                         required=True)
-    parser.add_argument('--superdir',
+    parser.add_argument('--store-superdir',
                         help='store superdir',
-                        dest='store_superdirs',
+                        nargs='*', dest='store_superdirs',
                         required=False)
     parser.add_argument('--pick',
                         help='name of file containing p marker',
@@ -339,7 +344,6 @@ if __name__=='__main__':
                         required=False)
     parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
-                        default="0.7:4.5",
                         required=False)
     parser.add_argument('--correction',
                         help='correction in time [s]',
