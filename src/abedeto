@@ -147,20 +147,14 @@ def process(args):
             continue
         subdir = pjoin(array_data, array_id)
         settings_fn = pjoin(subdir, 'plot_settings.yaml')
-        if os.path.isfile(settings_fn) and not args.overwrite_settings:
+        if os.path.isfile(settings_fn):
             settings = PlotSettings.load(filename=pjoin(settings_fn))
+            settings.update_from_args(args)
         else:
             settings = PlotSettings.from_argument_parser(args)
-            settings.trace_filename = pjoin(subdir, 'beam.mseed')
-            settings.station_filename = pjoin(subdir, 'array_center.pf')
-            settings.store_superdirs = [stores_superdir]
-            settings.event_filename = 'event.pf'
-            settings.store_id = store_mapper.mapping[array_id]
-            settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
-            settings.force_nearest_neighbor = args.force_nearest_neighbor
-            settings.onset_correction = args.correction
-            settings.dump(filename=settings_fn)
         plot(settings)
+        if args.overwrite_settings:
+            settings.dump(filename=settings_fn)
     if args.show:
         plt.show()
 
@@ -256,6 +250,10 @@ if __name__=='__main__':
     #process_parser.add_argument('--event',
     #                    help='name of file containing event catalog',
     #                    required=True)
+    process_parser.add_argument('--store-superdir',
+                        help='super directory where to look for stores',
+                        dest='store_superdir',
+                        required=False)
     process_parser.add_argument('--store',
                         help='name of store id',
                         dest='store_id',
@@ -265,24 +263,19 @@ if __name__=='__main__':
     #                    required=True)
     process_parser.add_argument('--depth',
                         help='assumed source depth [km]',
-                        default=10.,
                         required=False)
     process_parser.add_argument('--depths',
                         help='testing depths in km. zstart:zstop:delta, default 0:15:1',
-                        default='0:15:1',
                         required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
-                        default='velocity',
                         required=False)
     process_parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
-                        default="0.7:4.5",
                         required=False)
     process_parser.add_argument('--correction',
                         help='a global correction in time [s]',
-                        default=0,
-                       required=False)
+                                required=False)
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
