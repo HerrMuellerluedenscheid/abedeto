@@ -148,7 +148,5 @@ if __name__=="__main__":
         s = stations[0]
 
     events = list(Event.load_catalog(args.events))
-    if len(events)==1:
-        e = events[0]
 
-    propose_store(s, e, superdir=args.superdir, force_overwrite=args.force)
+    propose_store(s, events, superdir=args.superdir, force_overwrite=args.force)

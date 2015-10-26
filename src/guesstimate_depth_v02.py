@@ -41,7 +41,6 @@ class PlotSettings(Object):
                   'phase onset [s].', default=[-7, 15])
     onset_correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
-    # do I need this, here?
     save_as = String.T(default='depth_estimate.png', help='filename')
     force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
                                   'applies only laterally!',
@@ -60,17 +59,24 @@ class PlotSettings(Object):
             ButterworthResponse(corner=float(lp), order=4, type='low'),
             ButterworthResponse(corner=float(hp), order=4, type='high')]
         kwargs = {}
-        for arg in ['station_filename', 'trace_filename', 'store_id']:
+        for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
+                    'onset_correction', 'store_superdirs']:
             try:
                 kwargs.update({arg: getattr(args, arg)})
             except AttributeError:
-                logger.debug('trace_filename not defined in args')
+                logger.debug('%s not defined' % arg)
                 kwargs.update({arg: None})
         return cls(depth=args.depth,
                    depths=args.depths,
                    filters=filters,
                    **kwargs)
 
+    def do_filter(self, tr):
+        for f in self.filters:
+            tr = tr.transfer(transfer_function=f,
+                             tfade=20,
+                             cut_off_fading=False)
+        return tr
 
 class GaussNotch(FrequencyResponse):
     def __init__(self, center, fwhm):
@@ -80,6 +86,17 @@ class GaussNotch(FrequencyResponse):
     def evaluate(self, freqs):
         denom = self.fwhm / (2.*math.sqrt(math.log(2.)))
         return 1.-num.exp(1-((freqs-self.center)/denom)**2)
+
+def integrate_differentiate(tr, do):
+    if do == 'integrate':
+        response = IntegrationResponse()
+    elif do == 'differentiate':
+        response = DifferentiationResponse()
+    tr = tr.transfer(transfer_function=response,
+                     tfade=20,
+                     cut_off_fading=True,
+                     freqlimits=(0.10, 0.2, 10., 20.))
+    return tr
 
 def notch_filter(tr, f_center, bandwidth):
     indi = num.arange(tr.data_len(), dtype=num.float)
@@ -98,6 +115,162 @@ def station_to_target(s, quantity, store_id):
                  elevation=s.elevation,
                  quantity=quantity,
                  store_id=store_id)
+
+
+def plot(settings, show=False):
+
+    align_phase = 'P(cmb)P<(icb)(cmb)p'
+    #align_phase = 'P'
+    zoom_window = settings.zoom
+
+    quantity = settings.quantity
+    zstart, zstop, inkr = settings.depths.split(':')
+    test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
+
+    traces = io.load(settings.trace_filename)
+
+    event = model.load_events(settings.event_filename)
+    assert len(event)==1
+    event = event[0]
+    event.depth = float(settings.depth) * 1000.
+    base_source = DCSource.from_pyrocko_event(event)
+
+    test_sources = []
+    for d in test_depths:
+        s = base_source.clone()
+        s.depth = float(d)
+        test_sources.append(s)
+
+    if settings.store_superdirs:
+        engine = LocalEngine(store_superdirs=settings.store_superdirs)
+    else:
+        engine = LocalEngine(use_config=True)
+    try:
+        store = engine.get_store(settings.store_id)
+    except seismosizer.NoSuchStore as e:
+        logger.info('%s ... skipping.' % e)
+        return
+
+    station = model.load_stations(settings.station_filename)
+    assert len(station) == 1
+    station = station[0] 
+    targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
+    try:
+        request = engine.process(targets=targets, sources=test_sources)
+    except seismosizer.NoSuchStore as e:
+        logger.info('%s ... skipping.' % e)
+        return
+    except meta.OutOfBounds as error:
+        if settings.force_nearest_neighbor:
+            logger.warning('%s  Using nearest neighbor instead.' % error)
+            mod_targets = []
+            for t in targets:
+                closest_source = min(test_sources, key=lambda s: s.distance_to(t))
+                farthest_source = max(test_sources, key=lambda s: s.distance_to(t))
+                min_dist_delta = store.config.distance_min - closest_source.distance_to(t)
+                max_dist_delta = store.config.distance_max - farthest_source.distance_to(t)
+                if min_dist_delta < 0:
+                    azi, bazi = closest_source.azibazi_to(t)
+                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, min_dist_delta*cake.m2d)
+                elif max_dist_delta < 0:
+                    azi, bazi = farthest_source.azibazi_to(t)
+                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, max_dist_delta*cake.m2d)
+                t.lat, t.lon = newlat, newlon
+                mod_targets.append(t)
+            request = engine.process(targets=mod_targets, sources=test_sources)
+        else:
+            raise error
+
+    alldepths = list(test_depths)
+    depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
+
+    target_count = dict(zip([t.codes[:3] for t in targets], range(len(targets))))
+
+    fig, axs = plt.subplots(len(test_sources),
+                            len(targets),
+                            sharex=True)
+    if len(targets)==1:
+        axs = [axs]
+    for s, t, tr in request.iter_results():
+        if quantity=='velocity':
+            tr = integrate_differentiate(tr, 'differentiate')
+
+        ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
+        onset = engine.get_store(t.store_id).t(
+            'begin', (s.depth, s.distance_to(t)))
+
+        settings.do_filter(tr)
+        if settings.normalize:
+            tr.set_ydata(tr.get_ydata()/num.max(abs(tr.get_ydata())))
+            ax.tick_params(axis='y', which='both', left='off', right='off',
+                           labelleft='off')
+
+        ax.plot(tr.get_xdata()-onset-s.time, tr.get_ydata())
+        ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
+                transform=ax.transAxes,
+                horizontalalignment='right')
+
+        ax.axes.patch.set_visible(False)
+        if True:
+            mod = store.config.earthmodel_1d
+            arrivals = mod.arrivals(phases=[cake.PhaseDef('pP')], 
+                                      distances=[s.distance_to(t)*cake.m2d],
+                                      zstart=s.depth)
+
+            try:
+                t = arrivals[0].t
+                ydata_absmax = num.max(num.abs(tr.get_ydata()))
+                marker_length = 0.5
+                ax.plot([t-onset]*2,
+                        [-ydata_absmax*marker_length, ydata_absmax*marker_length],
+                        linewidth=1, c='red')
+            except IndexError:
+                logger.warning('no pP phase at d=%s z=%s stat=%s' % (s.distance_to(t)*cake.m2d,
+                                                                     s.depth, station.station))
+                pass
+
+        if s.depth==max(test_depths):
+            ax.xaxis.set_ticks_position('bottom')
+            for pos in ['left', 'top','right']:
+                ax.spines[pos].set_visible(False)
+            ax.set_xlabel('Time [s]')
+        else:
+            ax.axes.get_xaxis().set_visible(False)
+            for item in ax.spines.values():
+                item.set_visible(False)
+
+    for tr in traces:
+        correction = float(settings.onset_correction)
+        if quantity=='displacement':
+            tr = integrate_differentiate(tr, 'integrate')
+        settings.do_filter(tr)
+        ponset = engine.get_store(targets[0].store_id).t(
+            'begin', (event.depth, s.distance_to(targets[0]))) + event.time
+        ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
+        if settings.normalize:
+            tr.set_ydata(tr.get_ydata()/max(abs(tr.get_ydata())))
+            ax.tick_params(axis='y', which='both', left='off', right='off',
+                           labelleft='off')
+
+        ax.plot(tr.get_xdata()-ponset+correction, tr.get_ydata(), c='black', linewidth=2)
+        ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
+                transform=ax.transAxes,
+                horizontalalignment='right')
+        ax.axes.get_xaxis().set_visible(False)
+        ax.axes.patch.set_visible(False)
+        for item in ax.spines.values():
+            item.set_visible(False)
+        ax.set_xlim(zoom_window)
+    if settings.title:
+        params = {'array_id': '.'.join(station.nsl()), 'event_name':event.name}
+        fig.suptitle(settings.title % params)
+    plt.subplots_adjust(hspace=-.4,
+                        bottom=0.1)
+    if settings.save_as:
+        logger.info('save as: %s ' % settings.save_as)
+        fig.savefig(settings.save_as)
+    if show:
+        plt.show()
 
 if __name__=='__main__':
     import argparse
@@ -118,17 +291,20 @@ if __name__=='__main__':
                         dest='store_id',
                         help='name of store id',
                         required=True)
+    parser.add_argument('--superdir',
+                        help='store superdir',
+                        dest='store_superdirs',
+                        required=False)
     parser.add_argument('--pick',
                         help='name of file containing p marker',
-                        required=True)
+                        required=False)
     parser.add_argument('--depth',
                         help='assumed source depth [km]',
                         default=10.,
                         required=False)
     parser.add_argument('--depths',
                         help='testing depths in km. zstart:zstop:delta',
-                        default=0,
-                        required=False)
+                        required=True)
     parser.add_argument('--quantity',
                         help='velocity|displacement',
                         default='velocity',
@@ -139,6 +315,7 @@ if __name__=='__main__':
                         required=False)
     parser.add_argument('--correction',
                         help='correction in time [s]',
+                        dest='onset_correction',
                         default=0,
                         required=False)
     parser.add_argument('--normalize',
@@ -164,6 +341,10 @@ if __name__=='__main__':
                         dest='no_y_axis',
                         action='store_true',
                         required=False)
+    parser.add_argument('--show',
+                        help='Show results right away',
+                        action='store_true',
+                        required=False)
     parser.add_argument('--settings',
                         help='filename defining settings. Parameters defined '
                         'defined parameters will overwrite those.',
@@ -171,208 +352,5 @@ if __name__=='__main__':
 
     args = parser.parse_args()
 
-    settings = PlotSettings().from_arguement_parser(args)
-
-
-def plot(settings, show=False):
-    
-    align_phase = 'P(cmb)P<(icb)(cmb)p'
-    # use test depth:
-    # sind das die richtigen strike dip rake kobinationen?
-    # zeitbereich, den man betrachten moechte relativ zur p phase
-    zoom_window = settings.zoom
-    # zoom_window = [-7, 15]
-
-    #notch = 0.15 # use this for GERES
-    #notch = False
-    quantity = settings.quantity
-    #lp, hp = args.filter.split(':')
-    #bandpass = {'order': 4, 'corner_hp': float(lp), 'corner_lp': float(hp) }
-
-    zstart, zstop, inkr = settings.depths.split(':')
-    test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
-
-    traces = io.load(settings.trace_filename)
-
-    event = model.load_events(settings.event_filename)
-    assert len(event)==1
-    event = event[0]
-    event.depth = float(settings.depth) * 1000.
-    base_source = DCSource.from_pyrocko_event(event)
-
-    test_sources = []
-    # setup sources:
-    for d in test_depths:
-        #if d==base_source.depth:
-        #    continue
-        s = base_source.clone()
-        s.depth = float(d)
-        test_sources.append(s)
-
-    if settings.store_superdirs:
-        engine = LocalEngine(store_superdirs=settings.store_superdirs)
-    else:
-        engine = LocalEngine(use_config=True)
-    try:
-        store = engine.get_store(settings.store_id)
-    except seismosizer.NoSuchStore as e:
-        logger.warning('%s ... skipping.' % e)
-        return
-    station = model.load_stations(settings.station_filename)
-    assert len(station) == 1
-    station = station[0] 
-    targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
-    try:
-        request = engine.process(targets=targets, sources=test_sources)
-    except seismosizer.NoSuchStore as e:
-        logger.warning('%s ... skipping.' % e)
-        return
-    except meta.OutOfBounds as error:
-        if not settings.force_nearest_neighbor:
-            raise error
-        else:
-            logger.warning('%s  Using nearest neighbor instead.' % error)
-            mod_targets = []
-            for t in targets:
-                closest_source = min(test_sources, key=lambda s: s.distance_to(t))
-                farthest_source = max(test_sources, key=lambda s: s.distance_to(t))
-                min_dist_delta = store.config.distance_min - closest_source.distance_to(t)
-                max_dist_delta = store.config.distance_max - farthest_source.distance_to(t)
-                if min_dist_delta < 0:
-                    azi, bazi = closest_source.azibazi_to(t)
-                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, min_dist_delta*cake.m2d)
-                elif max_dist_delta < 0:
-                    azi, bazi = farthest_source.azibazi_to(t)
-                    newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, max_dist_delta*cake.m2d)
-                t.lat, t.lon = newlat, newlon
-                mod_targets.append(t)
-            request = engine.process(targets=mod_targets, sources=test_sources)
-
-    alldepths = list(test_depths)
-    depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
-
-    target_count = dict(zip([t.codes[:3] for t in targets], range(len(targets))))
-
-    fig, axs = plt.subplots(len(test_sources),
-                            len(targets),
-                            sharex=True)
-                            #frameon=True)
-    if len(targets)==1:
-        axs = [axs]
-
-    print t.codes
-    for s, t, tr in request.iter_results():
-        #if s.depth == base_source.depth and args.skip_true:
-        #    continue
-        #tr.bandpass(**bandpass)
-        #if notch:
-        #    notch_filter(tr, 2*num.pi*notch, 1.5)
-        if quantity=='velocity':
-            diff_response = DifferentiationResponse()
-            tr = tr.transfer(transfer_function=diff_response, tfade=20, freqlimits=(0.1, 0.2, 10., 20.))
-
-        ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
-        onset = engine.get_store(t.store_id).t('begin', (s.depth, s.distance_to(t)))
-        mod = store.config.earthmodel_1d
-        #onset = mod.arrivals(phases=[cake.PhaseDef('P')], 
-        #                              distances=[s.distance_to(t)*cake.m2d],
-        #                              zstart=s.depth)[0].t
-        ydata = tr.get_ydata()
-        for f in settings.filters:
-            tr = tr.transfer(transfer_function=f, tfade=20, cut_off_fading=False)
-        if settings.normalize:
-            ydata = ydata/num.max(abs(ydata))
-            ax.tick_params(axis='y',
-                           which='both',
-                           left='off',
-                           right='off',
-                           labelleft='off')
-
-        print 'source time', s.time
-        #ax.plot(tr.get_xdata()-s.time-onset, ydata)
-        ax.plot(tr.get_xdata()-onset, ydata)
-        #ax.set_xlim(zoom_window)
-        #if not args.no_y_axis:
-        ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
-                transform=ax.transAxes,
-                horizontalalignment='right')
-        ax.axes.patch.set_visible(False)
-        if False:
-            arrivals = mod.arrivals(phases=[cake.PhaseDef(align_phase)], 
-                                      distances=[s.distance_to(t)*cake.m2d],
-                                      zstart=s.depth)
-
-            try:
-                t = arrivals[0].t
-                ydata_absmax = num.max(num.abs(ydata))
-                marker_length = 0.5
-                ax.plot([t-onset]*2,
-                        [-ydata_absmax*marker_length, ydata_absmax*marker_length],
-                        linewidth=1, c='red')
-            except IndexError:
-                logger.warning('no pP phase at d=%s z=%s stat=%s' % (s.distance_to(t)*cake.m2d,
-                                                                     s.depth, station.station))
-                pass
-
-        if s.depth==max(test_depths):
-            ax.xaxis.set_ticks_position('bottom')
-            for pos in ['left', 'top','right']:
-                ax.spines[pos].set_visible(False)
-            ax.set_xlabel('Time [s]')
-        else:
-            ax.axes.get_xaxis().set_visible(False)
-            for item in ax.spines.values():
-                item.set_visible(False)
-
-    for tr in traces:
-        try:
-            correction = float(settings.onset_correction)
-        except KeyError:
-            correction = 0
-
-        if quantity=='displacement':
-            integration_response = IntegrationResponse()
-            tr = tr.transfer(transfer_function=integration_response,
-                             tfade=20,
-                             cut_off_fading=True,
-                             freqlimits=(0.10, 0.2, 10., 20.))
-        #if notch:
-        #    notch_filter(tr, 2*num.pi*notch, 1.5)
-        for f in settings.filters:
-            tr = tr.transfer(transfer_function=f, tfade=20, cut_off_fading=False)
-
-        #tr.bandpass(**bandpass)
-        ponset = engine.get_store(targets[0].store_id).t('begin', (event.depth, s.distance_to(targets[0]))) + event.time
-        #arrivals = mod.arrivals(phases=[cake.PhaseDef('P')], 
-        #                          distances=[ortho.distance_accurate50m(station, event)*cake.m2d],
-        #                          zstart=event.depth)
-        #ponset = arrivals[0].t + event.time
-        ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
-        ydata = tr.get_ydata()
-        if settings.normalize:
-            ydata = ydata/max(abs(ydata))
-            ax.tick_params(axis='y', which='both', left='off', right='off',
-                           labelleft='off')
-
-        ax.plot(tr.get_xdata()-ponset+correction, ydata, c='black', linewidth=2)
-        #if not args.no_y_axis:
-        ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
-                transform=ax.transAxes,
-                horizontalalignment='right')
-        ax.axes.get_xaxis().set_visible(False)
-        ax.axes.patch.set_visible(False)
-        for item in ax.spines.values():
-            item.set_visible(False)
-        ax.set_xlim(zoom_window)
-    if settings.title:
-        params = {'array_id': '.'.join(station.nsl()), 'event_name':event.name}
-        fig.suptitle(settings.title % params)
-    bottom = 0.1
-    plt.subplots_adjust(hspace=-.4,
-                        bottom=bottom)
-    if settings.save_as:
-        logger.info('save as: %s ' % settings.save_as)
-        fig.savefig(settings.save_as)
-    if show:
-        plt.show()
-
+    settings = PlotSettings.from_argument_parser(args)
+    plot(settings, show=args.show)

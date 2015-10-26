@@ -154,6 +154,7 @@ def process(args):
             settings.trace_filename = pjoin(subdir, 'beam.mseed')
             settings.station_filename = pjoin(subdir, 'array_center.pf')
             settings.store_superdirs = [stores_superdir]
+            settings.event_filename = 'event.pf'
             settings.store_id = store_mapper.mapping[array_id]
             settings.save_as = pjoin('array_data', array_id, '%s.png'%array_id)
             settings.force_nearest_neighbor = args.force_nearest_neighbor
