@@ -10,14 +10,15 @@ from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
 from pyrocko.gf import DCSource, Target, LocalEngine, seismosizer, meta
-from pyrocko.util import str_to_time
+from pyrocko.util import str_to_time, match_nslc
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
 km = 1000.
-
+logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
-
+arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
+            'gain', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom']
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',
@@ -37,7 +38,7 @@ class PlotSettings(Object):
     filters = List.T(FrequencyResponse.T(help='List of filters used to filter '
                                          'the traces'))
     zoom = List.T(Float.T(), help='Window to visualize with reference to the P '
-                  'phase onset [s].', default=[-7, 15])
+                    'phase onset [s].', default=[-7, 15])
     correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
     save_as = String.T(default='depth_estimate.png', help='filename')
@@ -50,6 +51,7 @@ class PlotSettings(Object):
     title = String.T(default='%(array_id)s - %(event_name)s', help='Add default title.')
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
+    gain = Float.T(default=1., help='Gain factor')
 
 
     def update_from_args(self, args):
@@ -63,8 +65,7 @@ class PlotSettings(Object):
         except:
             pass
 
-        for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-                    'correction', 'store_superdirs', 'depth', 'depths']:
+        for arg in arglist:
             try:
                 val = getattr(args, arg)
                 if val:
@@ -86,8 +87,7 @@ class PlotSettings(Object):
             ButterworthResponse(corner=float(hp), order=4, type='high')]
 
         kwargs = {}
-        for arg in ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-                    'correction', 'store_superdirs', 'depth', 'depths', 'correction']:
+        for arg in arglist:
             try:
                 val = getattr(args, arg)
                 if val:
@@ -147,9 +147,12 @@ def station_to_target(s, quantity, store_id):
 
 def plot(settings, show=False):
 
-    align_phase = 'P(cmb)P<(icb)(cmb)p'
-    #align_phase = 'P'
+    #align_phase = 'P(cmb)P<(icb)(cmb)p'
+    align_phase = 'P'
     zoom_window = settings.zoom
+
+    print zoom_window
+    ampl_scaler = '4*standard deviation'
 
     quantity = settings.quantity
     zstart, zstop, inkr = settings.depths.split(':')
@@ -179,7 +182,8 @@ def plot(settings, show=False):
         logger.info('%s ... skipping.' % e)
         return
 
-    station = model.load_stations(settings.station_filename)
+    stations = model.load_stations(settings.station_filename)
+    station = filter(lambda s: match_nslc('%s.%s.%s.*' % s.nsl(), traces[0].nslc_id), stations)
     assert len(station) == 1
     station = station[0] 
     targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
@@ -214,16 +218,16 @@ def plot(settings, show=False):
 
     target_count = dict(zip([t.codes[:3] for t in targets], range(len(targets))))
 
-    fig, axs = plt.subplots(len(test_sources),
-                            len(targets),
-                            sharex=True)
-    if len(targets)==1:
-        axs = [axs]
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    maxz = max(test_depths)
+    minz = min(test_depths)
+    relative_scale = (maxz-minz)*0.02
     for s, t, tr in request.iter_results():
         if quantity=='velocity':
             tr = integrate_differentiate(tr, 'differentiate')
 
-        ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
+        #ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
         onset = engine.get_store(t.store_id).t(
             'begin', (s.depth, s.distance_to(t)))
 
@@ -233,15 +237,24 @@ def plot(settings, show=False):
             ax.tick_params(axis='y', which='both', left='off', right='off',
                            labelleft='off')
 
-        ax.plot(tr.get_xdata()-onset-s.time, tr.get_ydata())
-        ax.text(-0.01, 0.5,'%s km' % (s.depth/1000.),
-                transform=ax.transAxes,
-                horizontalalignment='right')
-
-        ax.axes.patch.set_visible(False)
+        y_pos = s.depth
+        xdata = tr.get_xdata()-onset-s.time
+        tr_ydata = tr.get_ydata()
+        if ampl_scaler == 'trace min/max':
+            ampl_scale = float(max(abs(tr_ydata)))
+        elif ampl_scaler == '4*standard deviation':
+            ampl_scale = 4*float(num.std(tr_ydata))
+        else:
+            ampl_scale = 1.
+        ydata = (tr_ydata/ampl_scale * settings.gain)*relative_scale + y_pos
+        ax.plot(xdata, ydata, c='blue', linewidth=1., alpha=0.5)
+        #if self.fill_between:
+        #    ax.fill_between(xdata, y_pos, ydata, where=ydata>y_pos, color='black', alpha=0.5)
+        ax.text(zoom_window[0], y_pos, '%s km' % (s.depth/1000.), horizontalalignment='right', fontsize=12.)
         if True:
             mod = store.config.earthmodel_1d
-            arrivals = mod.arrivals(phases=[cake.PhaseDef('pP')], 
+            label = 'pP'
+            arrivals = mod.arrivals(phases=[cake.PhaseDef(label)],
                                       distances=[s.distance_to(t)*cake.m2d],
                                       zstart=s.depth)
 
@@ -249,56 +262,55 @@ def plot(settings, show=False):
                 t = arrivals[0].t
                 ydata_absmax = num.max(num.abs(tr.get_ydata()))
                 marker_length = 0.5
-                ax.plot([t-onset]*2,
-                        [-ydata_absmax*marker_length, ydata_absmax*marker_length],
-                        linewidth=1, c='red')
+                x_marker = [t-onset]*2
+                y = [y_pos-(maxz-minz)*0.025, y_pos+(maxz-minz)*0.025]
+                ax.plot(x_marker, y, linewidth=1, c='blue')
+
+                ax.text(x_marker[1]-x_marker[1]*0.005, y[1], label,
+                        fontsize=12,
+                        color='blue',
+                        verticalalignment='top',
+                        horizontalalignment='right')
+
             except IndexError:
                 logger.warning('no pP phase at d=%s z=%s stat=%s' % (s.distance_to(t)*cake.m2d,
                                                                      s.depth, station.station))
                 pass
-
-        if s.depth==max(test_depths):
-            ax.xaxis.set_ticks_position('bottom')
-            for pos in ['left', 'top','right']:
-                ax.spines[pos].set_visible(False)
-            ax.set_xlabel('Time [s]')
-        else:
-            ax.axes.get_xaxis().set_visible(False)
-            for item in ax.spines.values():
-                item.set_visible(False)
 
     if len(traces)==0:
         raise Exception('No Trace found!')
     if len(traces)>1:
         raise Exception('More then one trace provided!')
     else:
+        onset = 0
         tr = traces[0]
         correction = float(settings.correction)
         if quantity=='displacement':
             tr = integrate_differentiate(tr, 'integrate')
         tr = settings.do_filter(tr)
-        ponset = engine.get_store(targets[0].store_id).t(
+        onset = engine.get_store(targets[0].store_id).t(
             'begin', (event.depth, s.distance_to(targets[0]))) + event.time
-        ax = axs[target_count[tr.nslc_id[:3]]][depth_count[base_source.depth]]
         if settings.normalize:
             tr.set_ydata(tr.get_ydata()/max(abs(tr.get_ydata())))
             ax.tick_params(axis='y', which='both', left='off', right='off',
                            labelleft='off')
 
-        ax.plot(tr.get_xdata()-ponset+correction, tr.get_ydata(), c='black', linewidth=2)
-        ax.text(-0.01, 0.5,'%s km' % (base_source.depth/1000.),
-                transform=ax.transAxes,
-                horizontalalignment='right')
-        ax.axes.get_xaxis().set_visible(False)
-        ax.axes.patch.set_visible(False)
-        for item in ax.spines.values():
-            item.set_visible(False)
+        y_pos = event.depth
+        xdata = tr.get_xdata()-onset
+        tr_ydata = tr.get_ydata()
+        if ampl_scaler == 'trace min/max':
+            ampl_scale = float(max(abs(tr_ydata)))
+        elif ampl_scaler == '4*standard deviation':
+            ampl_scale = 4*float(num.std(tr_ydata))
+        else:
+            ampl_scale = 1.
+        ydata = (tr_ydata/ampl_scale * settings.gain)*relative_scale + y_pos
+        ax.plot(xdata, ydata, c='red', linewidth=1.)
         ax.set_xlim(zoom_window)
     if settings.title:
         params = {'array_id': '.'.join(station.nsl()), 'event_name':event.name}
         fig.suptitle(settings.title % params)
-    plt.subplots_adjust(hspace=-.4,
-                        bottom=0.1)
+    plt.subplots_adjust(hspace=-.4, bottom=0.1)
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
         fig.savefig(settings.save_as)
@@ -381,8 +393,9 @@ if __name__=='__main__':
                         help='filename defining settings. Parameters defined '
                         'defined parameters will overwrite those.',
                         required=False)
+    parser.add_argument('--gain', help='Gain factor', type=float, required=False)
+    parser.add_argument('--zoom', help='Zoom window like t1:t2', nargs=2, type=float, required=False)
 
     args = parser.parse_args()
-
     settings = PlotSettings.from_argument_parser(args)
     plot(settings, show=args.show)
