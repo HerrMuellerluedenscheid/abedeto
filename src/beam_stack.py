@@ -93,7 +93,7 @@ class BeamForming(Object):
                 if b>=0.:
                     self.bazi = b
                 elif b<0.:
-                    self.bazi = 360.+bb
+                    self.bazi = 360.+b
                 self.slow = ray.p/(cake.r2d*cake.d2m)
         else:
             self.bazi = bazi
