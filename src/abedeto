@@ -73,8 +73,8 @@ def download(args, event=None, prefix=''):
     except (AttributeError, TypeError):
         e = event
         provider = DataProvider()
-        tmin = CakeTiming(phase_selection='first(p|P|PP)-80', fallback_time=100.)
-        tmax = CakeTiming(phase_selection='first(p|P|PP)+120', fallback_time=600.)
+        tmin = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-80', fallback_time=100.)
+        tmax = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+120', fallback_time=600.)
         provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True)
 
 
@@ -114,26 +114,35 @@ def propose_stores(args):
     else:
         events = list(model.Event.load_catalog(event_fn))
 
-    provider = DataProvider.load(filename='request.yaml')
-    for array_id in provider.use:
-        directory = pjoin(array_data, array_id)
-        station = model.load_stations(pjoin(directory, 'array_center.pf'))
-        station = one_or_error(station)
-        depths = args.depths.split(':')
-        sdmin, sdmax, sddelta = map(float, depths)
-        configid = store_creator.propose_store(station, events, superdir=args.store_dir,
-                                               source_depth_min=sdmin,
-                                               source_depth_max=sdmax,
-                                               source_depth_delta=sddelta,
-                                               sample_rate=args.sample_rate,
-                                               force_overwrite=args.force_overwrite,
-                                               run_ttt=args.ttt,
-                                               simplify=args.simplify)
-        assert len(configid)==1
-        configid = configid[0]
-        store_mapper.mapping[array_id] = configid
+    depths = args.depths.split(':')
+    sdmin, sdmax, sddelta = map(lambda x: float(x), depths)
+    store_kwargs={'events':events,
+                  'superdir': args.store_dir,
+                  'source_depth_min': sdmin,
+                  'source_depth_max': sdmax,
+                  'source_depth_delta': sddelta,
+                  'sample_rate': args.sample_rate,
+                  'force_overwrite': args.force_overwrite,
+                  'run_ttt': args.ttt,
+                  'simplify': args.simplify}
 
-    store_mapper.dump(filename='store_mapping.yaml')
+    if args.station:
+        for s in model.load_stations(args.station):
+            station = model.load_stations(args.station)
+            station = one_or_error(station)
+            configid = store_creator.propose_store(station, **store_kwargs)
+    else:
+        provider = DataProvider.load(filename='request.yaml')
+        for array_id in provider.use:
+            directory = pjoin(array_data, array_id)
+            station = model.load_stations(pjoin(directory, 'array_center.pf'))
+            station = one_or_error(station)
+            configid = store_creator.propose_store(station, **store_kwargs)
+            assert len(configid)==1
+            configid = configid[0]
+            store_mapper.mapping[array_id] = configid
+
+        store_mapper.dump(filename='store_mapping.yaml')
 
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
@@ -232,6 +241,7 @@ if __name__=='__main__':
                                 help='Simplify model to increase performance '
                               'and in case of QSEIS lmax too small error.',
                                 action='store_true')
+    store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
     process_parser = sp.add_parser('process', help='Create images')#, parents=[parser])
     process_parser.add_argument('--array_id',
