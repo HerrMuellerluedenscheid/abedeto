@@ -20,7 +20,7 @@ def uniso(m):
 #stations_fn = 'GERES/array_center.pf'
 #station_label_mapping = ['GERES']
 #events_fn = 'castor_event_IGN.dat'
-#size_factor = 9.
+size_factor = 5.
 
 
 class MapParameters(Object):
@@ -29,21 +29,27 @@ class MapParameters(Object):
     lat = Float.T(help='center latitude')
     lon = Float.T(help='center longitude')
     radius = Float.T(help='radius of map')
-    outfn = Float.T(help='output filename', optional=True, default='map.png')
+    outfn = String.T(help='output filename', optional=True, default='map.png')
     stations = List.T(model.Station.T(), optional=True)
-    stations_label_mapping = List.T(String.T(), optional=True, default=False)
+    station_label_mapping = List.T(String.T(), optional=True, default=False)
     events = List.T(model.Event.T(), optional=True)
+    colors = List.T(String.T(), optional=True)
 
 
 def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=None, stations_label_mapping=None, map_parameters=None):
     if map_parameters:
-        width =map_parameters.width
+        width = map_parameters.width
         height=map_parameters.height
         lat=map_parameters.lat
         lon=map_parameters.lon
         radius=map_parameters.radius
+        outfn = map_parameters.outfn
+        stations = map_parameters.stations
+        station_label_mapping = map_parameters.station_label_mapping
+        events = map_parameters.events
+        colors = map_parameters.colors
 
-    map = automap.Map( width=width, height=height, lat=lat, lon=lon,
+    _map = automap.Map(width=width, height=height, lat=lat, lon=lon,
         radius=radius,
         topo_resolution_max=200,
         topo_resolution_min=40.,
@@ -53,29 +59,28 @@ def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=
         illuminate_factor_land=0.5,
         illuminate_factor_ocean=0.25)
 
-    map.draw_cities()
-
+    _map.draw_cities()
     if stations:
         lats = [s.lat for s in stations]
         lons = [s.lon for s in stations]
 
-        map.gmt.psxy(
+        _map.gmt.psxy(
             in_columns=(lons, lats),
-            S='t10p',
+            S='t20p',
             G='black',
-            *map.jxyr)
+            *_map.jxyr)
 
         for i_station, s in enumerate(stations):
             if station_label_mapping:
                 label = station_label_mapping[i_station]
             else:
                 label = "%s"%s.station
-            map.add_label(s.lat, s.lon, label)
-
+            _map.add_label(s.lat, s.lon, label)
     if events:
-        for e in events:
+        shifts = [(-0.6, -0.6), (-0.6, 0.)]
+        for i_e, e in enumerate(events):
             if e.moment_tensor:
-                size_cm = math.sqrt(math.sqrt(mag2mom(e.magnitude) / 100e17)) * size_factor
+                size_cm = math.sqrt(math.sqrt(mag2mom(e.moment_tensor.magnitude) / 100e17)) * size_factor
                 m = e.moment_tensor
                 #mc = uniso(m)
                 #mc = mc / e.moment_tensor.scalar_moment() * mag2mom(5.0)
@@ -84,18 +89,19 @@ def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=
                 #data = (e.lon), (e.lat) + (10,) + m6 + (1, 0, 0)
                 #data = lonlat_to_en1_km(e.lon, e.lat) + (10,) + m6 + (1, 0, 0)
                 #data = [e.lon, e.lat, 5, m6, 1,0,0]
-                data = (e.lon, e.lat, 10, m.strike1, m.dip1, m.rake1, 1, 0, 0, 'M %1.1f' % e.magnitude)
+                eshift, nshift = shifts[i_e]
+                data = (e.lon, e.lat, 10, m.strike1, m.dip1, m.rake1, 1, e.lon+eshift, e.lat+nshift, 'M %1.1f' % e.moment_tensor.magnitude)
                 if True:
-                    map.gmt.psmeca(
+                    _map.gmt.psmeca(
                         S='%s%g' % ('a', size_cm*2.0),
                         #G=gmtpy.color(colors[e.cluster]),
-                        G='red',
-                        #W='thinnest,%i/%i/%i' % darken(gmtpy.color_tup(colors[e.cluster])),
-                        #L='thinnest,%i/%i/%i' % darken(gmtpy.color_tup(colors[e.cluster])),
+                        G=colors[i_e],
+                        C='3p,0/0/0',
+                        #W='thinnest,%i/%i/%i' % (255, 255, 255),
+                        #L='thinnest,%i/%i/%i' % (255, 255, 255),
                         in_rows=[data],
-                        *map.jxyr)
-
-    map.save(outfn)
+                        *_map.jxyr)
+    _map.save(outpath=outfn)
 
 if __name__=='__main__':
     params = MapParameters(lat=10, lon=10, radius=10, outfn='test-map.pdf')
