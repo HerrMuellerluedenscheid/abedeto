@@ -1,6 +1,10 @@
 import numpy as num
 from scipy.signal import detrend
 import matplotlib
+
+font = {'family' : 'normal',
+        'size'   : 16}
+matplotlib.rc('font', **font)
 import math
 matplotlib.use = 'QtAgg4'
 import matplotlib.pyplot as plt
@@ -10,7 +14,7 @@ from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
 from pyrocko.gf import DCSource, Target, LocalEngine, seismosizer, meta
-from pyrocko.util import str_to_time, match_nslc
+from pyrocko.util import str_to_time, time_to_str, match_nslc
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
@@ -18,7 +22,8 @@ km = 1000.
 logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
 arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
-            'gain', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom']
+            'gain', 'gain_record', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom',
+           'title', 'save_as', 'color', 'auto_caption']
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',
@@ -52,7 +57,8 @@ class PlotSettings(Object):
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
     gain = Float.T(default=1., help='Gain factor')
-
+    gain_record = Float.T(default=1., help='Gain factor')
+    color = String.T(help='Trace color', default='blue')
 
     def update_from_args(self, args):
         kwargs = {}
@@ -148,10 +154,10 @@ def station_to_target(s, quantity, store_id):
 def plot(settings, show=False):
 
     #align_phase = 'P(cmb)P<(icb)(cmb)p'
+    with_onset_line = True
+    fill = True
     align_phase = 'P'
     zoom_window = settings.zoom
-
-    print zoom_window
     ampl_scaler = '4*standard deviation'
 
     quantity = settings.quantity
@@ -227,7 +233,6 @@ def plot(settings, show=False):
         if quantity=='velocity':
             tr = integrate_differentiate(tr, 'differentiate')
 
-        #ax = axs[target_count[t.codes[:3]]][depth_count[s.depth]]
         onset = engine.get_store(t.store_id).t(
             'begin', (s.depth, s.distance_to(t)))
 
@@ -239,19 +244,21 @@ def plot(settings, show=False):
 
         y_pos = s.depth
         xdata = tr.get_xdata()-onset-s.time
-        tr_ydata = tr.get_ydata()
+        tr_ydata = tr.get_ydata() * -1
+        visible = tr.chop(tmin=event.time+onset+zoom_window[0],
+                          tmax=event.time+onset+zoom_window[1])
         if ampl_scaler == 'trace min/max':
-            ampl_scale = float(max(abs(tr_ydata)))
+            ampl_scale = float(max(abs(visible.get_ydata())))
         elif ampl_scaler == '4*standard deviation':
-            ampl_scale = 4*float(num.std(tr_ydata))
+            ampl_scale = 4*float(num.std(visible.get_ydata()))
         else:
             ampl_scale = 1.
         ydata = (tr_ydata/ampl_scale * settings.gain)*relative_scale + y_pos
-        ax.plot(xdata, ydata, c='blue', linewidth=1., alpha=0.5)
-        #if self.fill_between:
-        #    ax.fill_between(xdata, y_pos, ydata, where=ydata>y_pos, color='black', alpha=0.5)
-        ax.text(zoom_window[0], y_pos, '%s km' % (s.depth/1000.), horizontalalignment='right', fontsize=12.)
-        if True:
+        ax.plot(xdata, ydata, c='black', linewidth=1., alpha=1.)
+        if False:
+            ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color='black', alpha=0.5)
+        ax.text(zoom_window[0]*1.09, y_pos, '%i' % (s.depth/1000.), horizontalalignment='right') #, fontsize=12.)
+        if False:
             mod = store.config.earthmodel_1d
             label = 'pP'
             arrivals = mod.arrivals(phases=[cake.PhaseDef(label)],
@@ -267,8 +274,8 @@ def plot(settings, show=False):
                 ax.plot(x_marker, y, linewidth=1, c='blue')
 
                 ax.text(x_marker[1]-x_marker[1]*0.005, y[1], label,
-                        fontsize=12,
-                        color='blue',
+                        #fontsize=12,
+                        color='black',
                         verticalalignment='top',
                         horizontalalignment='right')
 
@@ -296,24 +303,62 @@ def plot(settings, show=False):
                            labelleft='off')
 
         y_pos = event.depth
-        xdata = tr.get_xdata()-onset
-        tr_ydata = tr.get_ydata()
+        xdata = tr.get_xdata()-onset+correction
+        tr_ydata = tr.get_ydata() *-1
+        visible = tr.chop(tmin=onset+zoom_window[0]+correction,
+                          tmax=onset+zoom_window[1]+correction)
         if ampl_scaler == 'trace min/max':
-            ampl_scale = float(max(abs(tr_ydata)))
+            ampl_scale = float(max(abs(visible.get_ydata())))
         elif ampl_scaler == '4*standard deviation':
-            ampl_scale = 4*float(num.std(tr_ydata))
+            ampl_scale = 4*float(num.std(visible.get_ydata()))
         else:
             ampl_scale = 1.
-        ydata = (tr_ydata/ampl_scale * settings.gain)*relative_scale + y_pos
-        ax.plot(xdata, ydata, c='red', linewidth=1.)
+        ydata = (tr_ydata/ampl_scale * settings.gain*settings.gain_record)*relative_scale + y_pos
+        ax.plot(xdata, ydata, c=settings.color, linewidth=1.)
         ax.set_xlim(zoom_window)
+        zmax = max(test_depths)#*-1
+        zmin = min(test_depths)#*-1
+        zrange = zmax - zmin
+        ax.set_ylim((zmin-zrange*0.2, zmax+zrange*0.2))
+        ax.set_xlabel('Time [s]')
+        ax.text(-0.08, 0.6, 'Source depth [km]',
+                rotation=90,
+                horizontalalignment='right',
+                transform=ax.transAxes) #, fontsize=12.)
+
+    if fill:
+        ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color=settings.color, alpha=0.5)
+    if with_onset_line:
+        ax.text(0.08, zmax+zrange*0.1, 'P', fontsize=14)
+        vline = ax.axvline(0., c='black')
+        vline.set_linestyle('--')
     if settings.title:
-        params = {'array_id': '.'.join(station.nsl()), 'event_name':event.name}
-        fig.suptitle(settings.title % params)
-    plt.subplots_adjust(hspace=-.4, bottom=0.1)
+        params = {'array_id': '.'.join(station.nsl()),
+                  'event_name': event.name,
+                  'event_time': time_to_str(event.time)}
+        ax.text(-0.1, 1.05, settings.title % params,
+                horizontalalignment='right', 
+                transform=ax.transAxes)
+                #fontsize=14)
+    if settings.auto_caption:
+        cax = fig.add_axes([0., 0., 1, 0.05], label='caption')
+        cax.axis('off')
+        cax.xaxis.set_visible(False)
+        cax.yaxis.set_visible(False)
+        captions = {'filters':''}
+        for f in settings.filters:
+            captions['filters'] += '%s pass, order %s, f$_c$=%s Hz, '%(f.type, f.order, f.corner)
+        captions['store_sampling'] = 1./store.config.deltat
+        cax.text(0, 0, 'Filters: %(filters)s GFDB sampled at %(store_sampling)s Hz.' % captions,
+                 fontsize=12, transform=cax.transAxes)
+        plt.subplots_adjust(hspace=.4, bottom=0.15)
+    else:
+        plt.subplots_adjust(bottom=0.1)
+
+    ax.invert_yaxis()
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
-        fig.savefig(settings.save_as)
+        fig.savefig(settings.save_as, dpi=160, bbox_inches='tight')
     if show:
         plt.show()
 
@@ -393,8 +438,13 @@ if __name__=='__main__':
                         help='filename defining settings. Parameters defined '
                         'defined parameters will overwrite those.',
                         required=False)
+    parser.add_argument('--auto-caption', help='caption basic info',
+                        action='store_true', required=False)
+
     parser.add_argument('--gain', help='Gain factor', type=float, required=False)
+    parser.add_argument('--gain-record', dest='gain_record', help='Gain factor', type=float, required=False)
     parser.add_argument('--zoom', help='Zoom window like t1:t2', nargs=2, type=float, required=False)
+    parser.add_argument('--color', help='color of trace', required=False)
 
     args = parser.parse_args()
     settings = PlotSettings.from_argument_parser(args)
