@@ -103,7 +103,7 @@ class DataProvider(Object):
     def __init__(self, channels='SHZ', use=None, timings=None):
         self.use = use or []
         self.timings = timings or {}
-        self.iris_arrays = {'YKA': ('CN', 'YKA*', '', channels),
+        iris_arrays = {'YKA': ('CN', 'YKA*', '', channels),
                        'ESK': [('IM', 'EKB?', '', channels),
                                ('IM', 'EKR*', '', channels)],
                        'ESK1': ('IM', 'EKA?', '', channels),
@@ -135,19 +135,23 @@ class DataProvider(Object):
                         'BermudaIA': ('IM', 'I51H?', '', channels),
                         'FairbanksIA': ('IM', 'I53H?', '', channels)}
 
-        self.geofon_arrays = {'GERES':[('GR', 'GEA?', '*', channels),
-                                     ('GR', 'GEB?', '*', channels),
-                                     ('GR', 'GEC?', '*', channels),
-                                     ('GR', 'GED?', '*', channels)],
-                              'ROHRBACH':('6A', 'V*', '', channels),
+        geofon_arrays = { 'ROHRBACH':('6A', 'V*', '', channels),
                               'AntaOffshore': ('GR', 'I27L?', '*', channels),
                               'AntaOnshore': ('AW', 'VNA*', '*', channels),
                               'NORES': [('NO', 'NA*', '*', channels),
                                        ('NO', 'NB*', '*', channels),
                                        ('NO', 'NC*', '*', channels)]}
-    
+        bgr_arrays = {'GERES':[('GR', 'GEA?', '*', channels),
+                                     ('GR', 'GEB?', '*', channels),
+                                     ('GR', 'GEC?', '*', channels),
+                                     ('GR', 'GED?', '*', channels)],}
+
+        self.providers = {'iris': iris_arrays,
+                          'geofon': geofon_arrays,
+                          'bgr': bgr_arrays}
+
     def download(self, event, directory='array_data', timing=None, length=None,
-                 want='all', force=False, prefix=False, dump_config=False, site='iris'):
+                 want='all', force=False, prefix=False, dump_config=False):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
         use = []
@@ -156,71 +160,56 @@ class DataProvider(Object):
             raise Exception('Define one of "timing" and "length"')
         prefix = prefix or ''
         directory = pjoin(prefix, directory)
-        if site=='iris':
-            array_data_provder = self.iris_arrays
-        elif site=='geofon':
-            array_data_provder = self.geofon_arrays
-        else:
-            raise Exception('unknown site %s' % site)
-        if want=='all':
-            wanted_ids = array_data_provder.keys()
-        elif isinstance(want, str):
-            if not want in array_data_provder.keys():
-                raise Exception('unknown array id for this site %s' % want)
-            wanted_ids = [want]
-        else:
-            for iwant in want:
-                if not iwant in array_data_provder.keys():
-                    logger.warn('unknown array id for this site %s' % iwant)
-            wanted_ids = want
         create_directory(directory, force)
-        for array_id in wanted_ids:
-            if array_id not in wanted_ids:
-                continue
-            sub_directory = pjoin(directory, array_id)
-            logger.info("fetching %s" % array_id)
-            codes = array_data_provder[array_id]
-            if not isinstance(codes, list):
-                codes = [codes]
-            selection = [c + tuple((event.time, event.time+1000.)) for c in codes]
-            logger.debug('selection: ', selection)
-            try:
-                st = ws.station(site=site, selection=selection)
-            except ws.EmptyResult as e:
-                logging.error('%s on %s. skip' %(e, array_id))
-                continue
+        for site, array_data_provder in self.providers.items():
+            logger.info('requesting data from site %s' % site)
+            for array_id, codes in array_data_provder.items():
+                if array_id not in want and want!='all':
+                    continue
+                sub_directory = pjoin(directory, array_id)
+                logger.info("fetching %s" % array_id)
+                codes = array_data_provder[array_id]
+                if not isinstance(codes, list):
+                    codes = [codes]
+                selection = [c + tuple((event.time, event.time+1000.)) for c in codes]
+                logger.debug('selection: ', selection)
+                try:
+                    st = ws.station(site=site, selection=selection)
+                except ws.EmptyResult as e:
+                    logging.error('%s on %s. skip' %(e, array_id))
+                    continue
 
-            stations = st.get_pyrocko_stations()
-            min_dist = min(
-                [ortho.distance_accurate50m(s, event) for s in stations])
-            max_dist = max(
-                [ortho.distance_accurate50m(s, event) for s in stations])
+                stations = st.get_pyrocko_stations()
+                min_dist = min(
+                    [ortho.distance_accurate50m(s, event) for s in stations])
+                max_dist = max(
+                    [ortho.distance_accurate50m(s, event) for s in stations])
 
-            mod = cake.load_model(crust2_profile=(event.lat, event.lon))
-            if length:
-                tstart = 0.
-                tend = length
-            elif timing:
-                tstart = timing[0].t(mod, (event.depth, min_dist))
-                tend = timing[1].t(mod, (event.depth, max_dist))
-            selection = [c + tuple((event.time + tstart, event.time + tend)) for c in codes]
-            try:
-                d = ws.dataselect(site=site, selection=selection)
-                create_directory(sub_directory, force)
-                fn = pjoin(sub_directory, 'traces.mseed')
-                with open(fn, 'w') as f:
-                    f.write(d.read())
-                    f.close()
-                model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
-                if dump_config and timing:
-                    t = Timings(list(timing))
-                    ts[array_id] = t
-                    t.validate()
-                    t.dump(filename=pjoin(sub_directory, 'request.conf'))
-                if array_id not in use:
-                    use.append(array_id)
-            except ws.EmptyResult as e:
-                logging.error('%s on %s' %(e, array_id))
+                mod = cake.load_model(crust2_profile=(event.lat, event.lon))
+                if length:
+                    tstart = 0.
+                    tend = length
+                elif timing:
+                    tstart = timing[0].t(mod, (event.depth, min_dist))
+                    tend = timing[1].t(mod, (event.depth, max_dist))
+                selection = [c + tuple((event.time + tstart, event.time + tend)) for c in codes]
+                try:
+                    d = ws.dataselect(site=site, selection=selection)
+                    create_directory(sub_directory, force)
+                    fn = pjoin(sub_directory, 'traces.mseed')
+                    with open(fn, 'w') as f:
+                        f.write(d.read())
+                        f.close()
+                    model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
+                    if dump_config and timing:
+                        t = Timings(list(timing))
+                        ts[array_id] = t
+                        t.validate()
+                        t.dump(filename=pjoin(sub_directory, 'request.conf'))
+                    if array_id not in use:
+                        use.append(array_id)
+                except ws.EmptyResult as e:
+                    logging.error('%s on %s' %(e, array_id))
         if dump_config:
             self.timings = ts
             self.use = use
