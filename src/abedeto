@@ -306,6 +306,12 @@ if __name__=='__main__':
                         default=False,
                         action='store_true',
                         required=False)
+    process_parser.add_argument('--auto-caption',
+                        help='Add a caption to figure with basic info',
+                        dest='auto_caption',
+                        default=False,
+                        action='store_true',
+                        required=False)
     #process_parser.add_argument('--out_filename',
     #                    help='file to store image',
     #                    required=False)
