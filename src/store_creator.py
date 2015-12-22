@@ -62,7 +62,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         config.distance_min = math.floor(min(dists[ident]))
         config.distance_max = math.ceil(max(dists[ident]))
         if len(events)==1:
-            distance_delta = 10*km
+            distance_delta = 1.
         else:
             distance_delta = (config.distance_max-config.distance_min)/(numdists-1)
         config.distance_delta = distance_delta
