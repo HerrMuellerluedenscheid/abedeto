@@ -138,6 +138,7 @@ def propose_stores(args):
             station = model.load_stations(pjoin(directory, 'array_center.pf'))
             station = one_or_error(station)
             configid = store_creator.propose_store(station, **store_kwargs)
+            print configid
             assert len(configid)==1
             configid = configid[0]
             store_mapper.mapping[array_id] = configid

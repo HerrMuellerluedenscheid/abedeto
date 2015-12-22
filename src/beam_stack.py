@@ -184,7 +184,17 @@ class BeamForming(Object):
         #    if num_stacked[ch]>1:
         #        self.add_trace(tr)
         self.save_station(fn_dump_center)
+        self.checked_nslc([stack_trace])
         self.save(stack_trace, fn_beam)
+
+    def checked_nslc(self, trs):
+        for tr in trs:
+            oldids = tr.nslc_id
+            n,s,l,c = oldids
+            tr.set_codes(network=n[:2], station=s[:5], location=l[:2], channel=c[:3])
+            newids = tr.nslc_id
+            if cmp(oldids, newids) != 0:
+                logger.warn('nslc id truncated: %s to %s' % ('.'.join(oldids), '.'.join(newids)))
 
     def snuffle(self):
         '''Scrutinize the shifted traces.'''
