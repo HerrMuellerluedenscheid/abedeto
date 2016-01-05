@@ -137,21 +137,16 @@ def propose_stores(args):
             directory = pjoin(array_data, array_id)
             station = model.load_stations(pjoin(directory, 'array_center.pf'))
             station = one_or_error(station)
-            configid = store_creator.propose_store(station, **store_kwargs)
-            print configid
-            assert len(configid)==1
-            configid = configid[0]
-            store_mapper.mapping[array_id] = configid
+            configids = store_creator.propose_store(station, **store_kwargs)
+            store_mapper.mapping[array_id] = configids
 
         store_mapper.dump(filename='store_mapping.yaml')
 
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
 
-    store_mapper = StoreMapper.load(filename='store_mapping.yaml')
 
     provider = DataProvider.load(filename='request.yaml')
-
     for array_id in provider.use:
         if args.array_id and array_id != args.array_id:
             continue
@@ -162,6 +157,11 @@ def process(args):
             settings.update_from_args(args)
         else:
             settings = PlotSettings.from_argument_parser(args)
+
+        if not settings.trace_filename:
+            settings.trace_filename = pjoin(subdir, 'beam.mseed')
+        if not settings.station_filename:
+            settings.station_filename = pjoin(subdir, 'array_center.pf')
         plot(settings)
         if args.overwrite_settings:
             settings.dump(filename=settings_fn)
@@ -280,12 +280,16 @@ if __name__=='__main__':
                         required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
+                        choices=['velocity', 'displacement'],
                         required=False)
     process_parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
                         required=False)
     process_parser.add_argument('--correction', required=False,
                         help='a global correction in time [s]')
+    process_parser.add_argument('--gain', required=False,
+                        help='gain factor', default=1.,
+                                type=float)
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
