@@ -54,9 +54,9 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
     mod = cake.LayeredModel.from_scanlines(cake.from_crust2x2_profile(station_crust))
     setattr(_config, 'earthmodel_receiver_1d', mod)
 
-    configid = '%s_%s_' % (station.station, station_crust._ident)
     configs = []
     for ident, prof in earthmodels_1d.items():
+        configid = '%s_%s_%s' % (station.station, station_crust._ident, ident)
         config = copy.copy(_config)
 
         config.distance_min = math.floor(min(dists[ident]))
@@ -69,7 +69,6 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         mod = cake.load_model(crust2_profile=prof)
         if simplify:
             mod = mod.simplify(max_rel_error=0.002)
-        configid += '%s' % ident
         setattr(config, 'earthmodel_1d', mod)
         configs.append(config)
         config.id = configid
@@ -119,7 +118,6 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
 
     config_ids = [c.id for c in configs]
     return config_ids
-
 
 
 if __name__=="__main__":
