@@ -201,6 +201,7 @@ class DataProvider(Object):
                         f.write(d.read())
                         f.close()
                     model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
+                    st.dump(filename=pjoin(sub_directory, 'fdsn_request.yaml'))
                     if dump_config and timing:
                         t = Timings(list(timing))
                         ts[array_id] = t
