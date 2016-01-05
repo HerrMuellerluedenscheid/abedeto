@@ -23,7 +23,7 @@ logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
 arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
             'gain', 'gain_record', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom',
-           'title', 'save_as', 'color', 'auto_caption']
+           'title', 'save_as', 'color', 'auto_caption', 'quantity']
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',
@@ -129,7 +129,7 @@ def integrate_differentiate(tr, do):
     tr = tr.transfer(transfer_function=response,
                      tfade=20,
                      cut_off_fading=True,
-                     freqlimits=(0.10, 0.2, 10., 20.))
+                     freqlimits=(0.05, 0.1, 10., 20.))
     return tr
 
 def notch_filter(tr, f_center, bandwidth):
@@ -253,7 +253,8 @@ def plot(settings, show=False):
             ampl_scale = 4*float(num.std(visible.get_ydata()))
         else:
             ampl_scale = 1.
-        ydata = (tr_ydata/ampl_scale * settings.gain)*relative_scale + y_pos
+        ampl_scale /= settings.gain
+        ydata = (tr_ydata/ampl_scale)*relative_scale + y_pos
         ax.plot(xdata, ydata, c='black', linewidth=1., alpha=1.)
         if False:
             ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color='black', alpha=0.5)
