@@ -5,7 +5,7 @@ from abedeto.beam_stack import BeamForming
 import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
-from pyrocko.guts import Object, Dict, String
+from pyrocko.guts import Object, Dict, String, load as guts_load
 from abedeto.util import create_directory
 from abedeto.request import DataProvider, CakeTiming
 import logging
@@ -37,9 +37,15 @@ def one_2_list(items):
     if not isinstance(items, list):
         return [items]
 
-
 def init(args):
-    events = list(model.Event.load_catalog(args.events))
+    if args.format=='catalog':
+        events = list(model.Event.load_catalog(args.events))
+
+    elif args.format == 'yaml':
+        events = guts_load(filename=args.events)
+        if not isinstance(events, list):
+            events = [events]
+
     if args.name and len(events)>1:
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
@@ -194,6 +200,10 @@ if __name__=='__main__':
                             action='store_true',
                             default=False,
                             help='force overwrite')
+    init_parser.add_argument('--format',
+                            default='catalog',
+                            choices=['yaml', 'catalog'],
+                            help='[yaml|catalog], default catalog')
 
     download_parser = sp.add_parser('download', help='Download data')#, parents=[parser])
     download_parser.add_argument('--download',
