@@ -327,9 +327,10 @@ if __name__=='__main__':
                         default=False,
                         action='store_true',
                         required=False)
-    #process_parser.add_argument('--out_filename',
-    #                    help='file to store image',
-    #                    required=False)
+    process_parser.add_argument('--out-filename',
+                        help='file to store image',
+                        dest='outfn',
+                        required=False)
     process_parser.add_argument('--print-parameters', dest='print_parameters',
                         help='creates a text field giving the used parameters',
                         required=False)
