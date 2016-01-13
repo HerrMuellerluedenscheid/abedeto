@@ -118,6 +118,8 @@ class DataProvider(Object):
                        'NVAR': ('IM', 'NV*', '', channels),
                        'PDAR': ('IM', 'PD*', '', channels),
                        'TXAR': ('IM', 'TX*', '', channels),
+                       'Pilbara': ('AU', 'PSA*', '', channels),
+                       'AliceSprings': ('AU', 'AS*', '', channels),
                        'GERES': [('IM', 'GEA?', '', channels),
                                  ('IM', 'GEB?', '', channels),
                                  ('IM', 'GEC?', '', channels),
