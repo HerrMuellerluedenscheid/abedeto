@@ -77,7 +77,7 @@ class BeamForming(Object):
                                  depth=0.,
                                  name='Array Center',
                                  network=c_station_id[0],
-                                 station=c_station_id[1])
+                                 station=c_station_id[1][:5])
         fn_dump_center = kwargs.get('fn_dump_center', 'array_center.pf')
         fn_beam = kwargs.get('fn_beam', 'beam.mseed')
         if event:
