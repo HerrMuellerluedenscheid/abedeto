@@ -1,5 +1,6 @@
 from pyrocko import automap
 import math
+import shutil
 from pyrocko import model, gmtpy
 from pyrocko.moment_tensor import magnitude_to_moment as mag2mom
 from pyrocko.moment_tensor import to6
@@ -30,16 +31,16 @@ class ArrayMap(automap.Map):
             self._draw_topo_scale()
 
         if self.stations:
-            lats = [s.lat for s in stations]
-            lons = [s.lon for s in stations]
+            lats = [s.lat for s in self.stations]
+            lons = [s.lon for s in self.stations]
 
-            self.mt.psxy(
+            self.gmt.psxy(
                 in_columns=(lons, lats),
                 S='t10p',
                 G='black',
                 *self.jxyr)
 
-            for i_station, s in enumerate(stations):
+            for i_station, s in enumerate(self.stations):
                 if self.station_label_mapping:
                     label = self.station_label_mapping[i_station]
                 else:
@@ -48,6 +49,8 @@ class ArrayMap(automap.Map):
         if self.event:
             e = self.event
             if e.moment_tensor:
+                if e.magnitude == None:
+                    e.magnitude = e.moment_tensor.magnitude
                 size_cm = math.sqrt(math.sqrt(mag2mom(e.magnitude) / 100e17)) * size_factor
                 m = e.moment_tensor
                 m6 = m.m6_up_south_east()
