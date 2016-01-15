@@ -35,7 +35,6 @@ class MapParameters(Object):
     events = List.T(model.Event.T(), optional=True)
     colors = List.T(String.T(), optional=True)
 
-
 def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=None, stations_label_mapping=None, map_parameters=None):
     if map_parameters:
         width = map_parameters.width
@@ -59,7 +58,7 @@ def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=
         illuminate_factor_land=0.5,
         illuminate_factor_ocean=0.25)
 
-    _map.draw_cities()
+    #_map.draw_cities()
     if stations:
         lats = [s.lat for s in stations]
         lons = [s.lon for s in stations]
@@ -104,5 +103,6 @@ def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=
     _map.save(outpath=outfn)
 
 if __name__=='__main__':
-    params = MapParameters(lat=10, lon=10, radius=10, outfn='test-map.pdf')
+    stations = model.load_stations('/home/marius/north_korea/north_korea/array_data/arrays.pf')
+    params = MapParameters(lat=41.3, lon=129.08, radius=8000000, outfn='test-map.pdf',stations=stations)
     make_map(map_parameters=params)
