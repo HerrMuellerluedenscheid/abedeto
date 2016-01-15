@@ -5,6 +5,7 @@ from abedeto.beam_stack import BeamForming
 import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
+from pyrocko import orthodrome as ortho
 from pyrocko.guts import Object, Dict, String, load as guts_load
 from abedeto.util import create_directory
 from abedeto.request import DataProvider, CakeTiming
@@ -22,6 +23,12 @@ stores_superdir = 'stores'
 array_data = 'array_data'
 event_fn = 'event.pf'
 km = 1000.
+
+
+def iter_data_dirs(rootdir='array_data'):
+    for subdir, dirs, files in os.walk(rootdir):
+        yield subdir
+
 
 class StoreMapper(Object):
     mapping = Dict.T(String.T(), String.T())
@@ -91,6 +98,7 @@ def beam(args):
     event = event[0]
     provider = DataProvider.load(filename='request.yaml')
     array_centers = []
+    distances = []
     for array_id in provider.use:
         directory = pjoin(array_data, array_id)
         traces = io.load(pjoin(directory, 'traces.mseed'))
@@ -105,12 +113,15 @@ def beam(args):
             bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
 
         array_centers.append(bf.station_c)
-
+        distances.append(ortho.distance_accurate50m(event, bf.station_c))
     # how to define map dimensions?
-    #map = ArrayMap(stations=array_centers,
-    #               station_label_mapping=provider.use,
-    #               event=event)
-    #map.save(args.map_filename)
+    map = ArrayMap(stations=array_centers,
+                   station_label_mapping=provider.use,
+                   event=event)
+    map.radius = max(distances)*1.06
+    map.lat=event.lat
+    map.lon=event.lon
+    map.save(args.map_filename)
 
 def propose_stores(args):
     from abedeto.get_bounds import get_bounds
@@ -174,6 +185,26 @@ def process(args):
     if args.show:
         plt.show()
 
+def invert(args):
+    from abedeto.guesstimate_depth_v02 import Inverter
+    provider = DataProvider.load(filename='request.yaml')
+    inverter = Inverter(provider, args)
+    inverter.invert(args)
+    inverter.plot_results()
+
+
+def mapify(args):
+    #from abedeto.map import make_map, MapParameters
+    stations = []
+    for d in iter_data_dirs():
+        stations.append(model.load_stations(pjoin(d, 'array_center.pf'))[0])
+
+    events = list(model.Event.load_catalog(event_fn))
+    ArrayMap(stations=stations, event=event)
+    #params = MapParameters.from_argument_parser(args, {'stations':stations})
+    #make_map(params, )
+
+
 def get_bounds(args):
     from abedeto.get_bounds import get_bounds
 
@@ -217,7 +248,7 @@ if __name__=='__main__':
 
     beam_parser = sp.add_parser('beam', help='Beam forming')#, parents=[parser])
     beam_parser.add_argument('--map_filename', help='filename of map',
-                            default='map.png')
+                            default='map.pdf')
     beam_parser.add_argument('--normalize',
                             help='normlize by standard deviation of trace',
                             action='store_true',
@@ -324,12 +355,12 @@ if __name__=='__main__':
     process_parser.add_argument('--auto-caption',
                         help='Add a caption to figure with basic info',
                         dest='auto_caption',
-                        default=False,
+                        default=True,
                         action='store_true',
                         required=False)
     process_parser.add_argument('--out-filename',
                         help='file to store image',
-                        dest='outfn',
+                        dest='save_as',
                         required=False)
     process_parser.add_argument('--print-parameters', dest='print_parameters',
                         help='creates a text field giving the used parameters',
@@ -337,6 +368,10 @@ if __name__=='__main__':
     process_parser.add_argument('--overwrite-settings', dest='overwrite_settings',
                         help='overwrite former settings files', default=False,
                         action='store_true', required=False)
+
+    process_parser.add_argument('--cc-align', dest='cc_align',
+                        help='use x seconds cross correlation to align traces',
+                        type=float, default=0., required=False)
 
     bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
                                   'Helpful when generating stores for entire catalogs.')#, parents=[parser])
@@ -348,6 +383,8 @@ if __name__=='__main__':
                         help='array id',
                         dest='array_id',
                         required=True)
+
+    invert_parser = sp.add_parser('invert', help='Invert')
 
     args = parser.parse_args()
 
@@ -365,9 +402,15 @@ if __name__=='__main__':
     if args.cmd == 'beam':
         beam(args)
 
-    if args.cmd == 'process':
-        process(args)
+    #if args.cmd == 'process':
+    #    process(args)
+
+    if args.cmd == 'map':
+        mapify(args)
 
     if args.cmd == 'bounds':
         get_bounds(args)
+
+    if args.cmd == 'process':
+        invert(args)
 
