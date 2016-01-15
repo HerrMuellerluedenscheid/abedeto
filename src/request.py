@@ -203,12 +203,12 @@ class DataProvider(Object):
                         f.write(d.read())
                         f.close()
                     model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
-                    st.dump(filename=pjoin(sub_directory, 'fdsn_request.yaml'))
+                    #st.dump(filename=pjoin(sub_directory, 'fdsn_request.yaml'))
                     if dump_config and timing:
                         t = Timings(list(timing))
                         ts[array_id] = t
                         t.validate()
-                        t.dump(filename=pjoin(sub_directory, 'request.conf'))
+                        #t.dump(filename=pjoin(sub_directory, 'request.conf'))
                     if array_id not in use:
                         use.append(array_id)
                 except ws.EmptyResult as e:
