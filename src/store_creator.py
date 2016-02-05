@@ -67,6 +67,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
     wanted = [define_method(ph) for ph in phases]
 
     for ident, prof in earthmodels_1d.items():
+        logger.info('.'*70)
         configid = '%s_%s_%s' % (station.station, station_crust._ident, ident)
         config = copy.copy(_config)
 
