@@ -46,12 +46,10 @@ class PlotSettings(Object):
                     'phase onset [s].', default=[-7, 15])
     correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
-    save_as = String.T(default='depth_estimate.png', help='filename')
+    save_as = String.T(default='depth_%(array_id)s.png', help='filename')
     force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
-                                  'applies only laterally!',
-                                  default=False)
-    auto_caption = Bool.T(help='add a caption giving basic information. Needs '
-                               'implementation.',
+                        'applies only laterally!', default=False)
+    auto_caption = Bool.T(help='Add a caption giving basic information.',
                           default=False)
     title = String.T(default='%(array_id)s - %(event_name)s', help='Add default title.')
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
@@ -317,8 +315,8 @@ def plot(settings, show=False):
         ydata = (tr_ydata/ampl_scale * settings.gain*settings.gain_record)*relative_scale + y_pos
         ax.plot(xdata, ydata, c=settings.color, linewidth=1.)
         ax.set_xlim(zoom_window)
-        zmax = max(test_depths)#*-1
-        zmin = min(test_depths)#*-1
+        zmax = max(test_depths)
+        zmin = min(test_depths)
         zrange = zmax - zmin
         ax.set_ylim((zmin-zrange*0.2, zmax+zrange*0.2))
         ax.set_xlabel('Time [s]')
@@ -330,17 +328,16 @@ def plot(settings, show=False):
     if fill:
         ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color=settings.color, alpha=0.5)
     if with_onset_line:
-        ax.text(0.08, zmax+zrange*0.1, 'P', fontsize=14)
+        ax.text(0.08, zmax+zrange*0.1, align_phase, fontsize=14)
         vline = ax.axvline(0., c='black')
         vline.set_linestyle('--')
     if settings.title:
         params = {'array_id': '.'.join(station.nsl()),
                   'event_name': event.name,
                   'event_time': time_to_str(event.time)}
-        ax.text(-0.1, 1.05, settings.title % params,
-                horizontalalignment='right', 
+        ax.text(0.5, 1.05, settings.title % params,
+                horizontalalignment='center', 
                 transform=ax.transAxes)
-                #fontsize=14)
     if settings.auto_caption:
         cax = fig.add_axes([0., 0., 1, 0.05], label='caption')
         cax.axis('off')
@@ -359,7 +356,7 @@ def plot(settings, show=False):
     ax.invert_yaxis()
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
-        fig.savefig(settings.save_as, dpi=160, bbox_inches='tight')
+        fig.savefig(settings.save_as%{'array_id': '.'.join(station.nsl())}, dpi=160, bbox_inches='tight')
     if show:
         plt.show()
 
@@ -370,6 +367,9 @@ class Inverter():
         self.args = args
 
     def invert(self, args):
+        align_phase = 'P'
+        ampl_scaler = '4*standard deviation'
+
         for array_id in self.provider.use:
             try:
                 if args.array_id and array_id != args.array_id:
@@ -403,9 +403,7 @@ class Inverter():
                 settings.trace_filename = pjoin(subdir, 'beam.mseed')
             if not settings.station_filename:
                 settings.station_filename = pjoin(subdir, 'array_center.pf')
-            align_phase = 'P'
             zoom_window = settings.zoom
-            ampl_scaler = '4*standard deviation'
             mod = store.config.earthmodel_1d
 
             zstart, zstop, inkr = settings.depths.split(':')
@@ -423,13 +421,12 @@ class Inverter():
                 s.depth = float(d)
                 test_sources.append(s)
 
-
             stations = model.load_stations(settings.station_filename)
             station = filter(lambda s: match_nslc('%s.%s.%s.*' % s.nsl(), traces[0].nslc_id), stations)
             if len(station) != 1:
                 logger.error('no matching stations found. %s %s' % []) 
-
-            station = station[0]
+            else:
+                station = station[0]
             targets = [station_to_target(station, quantity=settings.quantity, store_id=settings.store_id)]
             try:
                 request = engine.process(targets=targets, sources=test_sources)
@@ -527,8 +524,6 @@ class Inverter():
             print 'best fits: \n', i_best_fits
             best_fits = num.min(misfits_array, 2)
             #cmap = matplotlib.cm.get_cmap()
-            import pdb
-            pdb.set_trace()
             xmesh, ymesh = num.meshgrid(mesh_fc, mesh_fwidth)
             #c = (best_fits-num.min(best_fits))/(num.max(best_fits)-num.min(best_fits))
             ax.scatter(xmesh, ymesh, best_fits*100)
