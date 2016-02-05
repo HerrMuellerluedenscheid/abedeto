@@ -5,7 +5,7 @@ from abedeto.beam_stack import BeamForming
 import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
-from pyrocko.guts import Object, Dict, String, load as guts_load
+from pyrocko.guts import Object, Dict, String, List, load as guts_load
 from abedeto.util import create_directory
 from abedeto.request import DataProvider, CakeTiming
 import logging
@@ -24,7 +24,9 @@ event_fn = 'event.pf'
 km = 1000.
 
 class StoreMapper(Object):
-    mapping = Dict.T(String.T(), String.T())
+    mapping = Dict.T(String.T(), List.T(String.T()))
+    def __getitem__(self, key):
+        return self.mapping[key]
 
 def one_or_error(items):
     e = list(items)
@@ -150,12 +152,14 @@ def propose_stores(args):
 
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
-
-
     provider = DataProvider.load(filename='request.yaml')
-    for array_id in provider.use:
-        if args.array_id and array_id != args.array_id:
-            continue
+    if args.array_id:
+        array_ids = [args.array_id]
+    else:
+        array_ids = provider.use
+
+    store_mapping = StoreMapper.load(filename='store_mapping.yaml')
+    for array_id in array_ids:
         subdir = pjoin(array_data, array_id)
         settings_fn = pjoin(subdir, 'plot_settings.yaml')
         if os.path.isfile(settings_fn):
@@ -168,6 +172,12 @@ def process(args):
             settings.trace_filename = pjoin(subdir, 'beam.mseed')
         if not settings.station_filename:
             settings.station_filename = pjoin(subdir, 'array_center.pf')
+        if not settings.store_id:
+            if len(store_mapping[array_id])>1:
+                logging.exception(Exception('Found several store_ids for %s. Use'
+                        ' --array_id=STORE_ID to excplicitly set store' % array_id))
+            else:
+                settings.store_id = store_mapping[array_id][0]
         plot(settings)
         if args.overwrite_settings:
             settings.dump(filename=settings_fn)
@@ -189,7 +199,7 @@ if __name__=='__main__':
     parser.add_argument('--log', required=False, default='INFO')
 
     sp = parser.add_subparsers(dest='cmd')
-    init_parser = sp.add_parser('init', help='create a new project')#, parents=[parser])
+    init_parser = sp.add_parser('init', help='create a new project')
     init_parser.add_argument('events', help='Event you don\'t know the depth of')
     init_parser.add_argument('--name', help='name')
     init_parser.add_argument('--download',
@@ -205,7 +215,7 @@ if __name__=='__main__':
                             choices=['yaml', 'catalog'],
                             help='[yaml|catalog], default catalog')
 
-    download_parser = sp.add_parser('download', help='Download data')#, parents=[parser])
+    download_parser = sp.add_parser('download', help='Download data')
     download_parser.add_argument('--download',
                                 help='download available data',
                                 default=False,
@@ -215,7 +225,7 @@ if __name__=='__main__':
                                 dest='download_settings',
                                 default=False)
 
-    beam_parser = sp.add_parser('beam', help='Beam forming')#, parents=[parser])
+    beam_parser = sp.add_parser('beam', help='Beam forming')
     beam_parser.add_argument('--map_filename', help='filename of map',
                             default='map.png')
     beam_parser.add_argument('--normalize',
@@ -228,12 +238,12 @@ if __name__=='__main__':
                             action='store_true',
                             default=False)
 
-    store_parser = sp.add_parser('stores', help='Propose GF stores')#, parents=[parser])
+    store_parser = sp.add_parser('stores', help='Propose GF stores')
     store_parser.add_argument('--super-dir',
                                 dest='store_dir',
-                                help='super directory where to search/create stores',
+                                help='super directory where to search/create stores. Default: stores',
                                 default='stores')
-    store_parser.add_argument('--depths', help='zmin:zmax:deltaz [km]', required=True)
+    store_parser.add_argument('--depths', help='zmin:zmax:deltaz [km]', default='0:15:1', required=False)
     store_parser.add_argument('--sampling-rate', dest='sample_rate', type=float,
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
@@ -254,7 +264,7 @@ if __name__=='__main__':
                                 action='store_true')
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
-    process_parser = sp.add_parser('process', help='Create images')#, parents=[parser])
+    process_parser = sp.add_parser('process', help='Create images')
     process_parser.add_argument('--array_id',
                                 help='array_id to process',
                                 required=False,
@@ -263,18 +273,12 @@ if __name__=='__main__':
                                 help='settings file',
                                 default=False,
                                 required=False)
-    #process_parser.add_argument('--trace', help='name of file containing trace',
-    #                           required=True)
-    #process_parser.add_argument('--station',
-    #                    help='name of file containing station information',
-    #                    required=True)
     #process_parser.add_argument('--event',
     #                    help='name of file containing event catalog',
     #                    required=True)
     process_parser.add_argument('--store-superdirs',
-                        help='super directory where to look for stores',
-                        dest='store_superdirs', nargs='*',
-                        required=False)
+            help='super directory where to look for stores',
+            dest='store_superdirs', nargs='*', default=['stores'], required=False)
     process_parser.add_argument('--store',
                         help='name of store id',
                         dest='store_id',
@@ -287,7 +291,7 @@ if __name__=='__main__':
                         required=False)
     process_parser.add_argument('--depths',
                         help='testing depths in km. zstart:zstop:delta, default 0:15:1',
-                        required=False)
+                        default='0:15:1', required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
                         choices=['velocity', 'displacement'],
