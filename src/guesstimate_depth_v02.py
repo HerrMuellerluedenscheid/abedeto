@@ -363,6 +363,183 @@ def plot(settings, show=False):
     if show:
         plt.show()
 
+
+class Inverter():
+    def __init__(self, provider, args):
+        self.provider = provider
+        self.args = args
+
+    def invert(self, args):
+        for array_id in self.provider.use:
+            try:
+                if args.array_id and array_id != args.array_id:
+                    continue
+            except AttributeError:
+                pass
+            subdir = pjoin('array_data', array_id)
+            settings_fn = pjoin(subdir, 'plot_settings.yaml')
+            if os.path.isfile(settings_fn):
+                settings = PlotSettings.load(filename=pjoin(settings_fn))
+                settings.update_from_args(self.args)
+            else:
+                logger.warn('no settings found: %s' % array_id)
+                continue
+            if settings.store_superdirs:
+                engine = LocalEngine(store_superdirs=settings.store_superdirs)
+            else:
+                engine = LocalEngine(use_config=True)
+            try:
+                store = engine.get_store(settings.store_id)
+            except seismosizer.NoSuchStore as e:
+                logger.info('%s ... skipping.' % e)
+                return
+            try:
+                store = engine.get_store(settings.store_id)
+            except seismosizer.NoSuchStore as e:
+                logger.info('%s ... skipping.' % e)
+                return
+
+            if not settings.trace_filename:
+                settings.trace_filename = pjoin(subdir, 'beam.mseed')
+            if not settings.station_filename:
+                settings.station_filename = pjoin(subdir, 'array_center.pf')
+            align_phase = 'P'
+            zoom_window = settings.zoom
+            ampl_scaler = '4*standard deviation'
+            mod = store.config.earthmodel_1d
+
+            zstart, zstop, inkr = settings.depths.split(':')
+            test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
+            traces = io.load(settings.trace_filename)
+            event = model.load_events(settings.event_filename)
+            assert len(event)==1
+            event = event[0]
+            event.depth = float(settings.depth) * 1000.
+            base_source = MTSource.from_pyrocko_event(event)
+
+            test_sources = []
+            for d in test_depths:
+                s = base_source.clone()
+                s.depth = float(d)
+                test_sources.append(s)
+
+
+            stations = model.load_stations(settings.station_filename)
+            station = filter(lambda s: match_nslc('%s.%s.%s.*' % s.nsl(), traces[0].nslc_id), stations)
+            if len(station) != 1:
+                logger.error('no matching stations found. %s %s' % []) 
+
+            station = station[0]
+            targets = [station_to_target(station, quantity=settings.quantity, store_id=settings.store_id)]
+            try:
+                request = engine.process(targets=targets, sources=test_sources)
+            except seismosizer.NoSuchStore as e:
+                logger.info('%s ... skipping.' % e)
+                return
+            except meta.OutOfBounds as error:
+                if settings.force_nearest_neighbor:
+                    logger.warning('%s  Using nearest neighbor instead.' % error)
+                    mod_targets = []
+                    for t in targets:
+                        closest_source = min(test_sources, key=lambda s: s.distance_to(t))
+                        farthest_source = max(test_sources, key=lambda s: s.distance_to(t))
+                        min_dist_delta = store.config.distance_min - closest_source.distance_to(t)
+                        max_dist_delta = store.config.distance_max - farthest_source.distance_to(t)
+                        if min_dist_delta < 0:
+                            azi, bazi = closest_source.azibazi_to(t)
+                            newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, min_dist_delta*cake.m2d)
+                        elif max_dist_delta < 0:
+                            azi, bazi = farthest_source.azibazi_to(t)
+                            newlat, newlon = ortho.azidist_to_latlon(t.lat, t.lon, azi, max_dist_delta*cake.m2d)
+                        t.lat, t.lon = newlat, newlon
+                        mod_targets.append(t)
+                    request = engine.process(targets=mod_targets, sources=test_sources)
+                else:
+                    raise error
+
+            candidates = []
+            for s, t, tr in request.iter_results():
+                tr.deltat = regularize_float(tr.deltat)
+                if True:
+                    tr = integrate_differentiate(tr, 'differentiate')
+                tr = settings.do_filter(tr)
+                candidates.append((s, tr))
+            assert len(traces)==1
+            ref = traces[0]
+            ref = settings.do_filter(ref)
+            dist = ortho.distance_accurate50m(event, station)
+            tstart = self.provider.timings[array_id].timings[0].t(mod, (event.depth, dist)) + event.time
+            tend = self.provider.timings[array_id].timings[1].t(mod, (event.depth, dist)) + event.time
+            ref = ref.chop(tstart, tend)
+            misfits = []
+
+            center_freqs = num.arange(1., 9., 4.)
+            num_f_widths = len(center_freqs)
+
+            mesh_fc = num.zeros(len(center_freqs)*num_f_widths*len(candidates))
+            mesh_fwidth = num.zeros(len(center_freqs)*num_f_widths*len(candidates))
+            misfits_array = num.zeros((len(center_freqs), num_f_widths, len(candidates)))
+            depths_array = num.zeros((len(center_freqs), num_f_widths, len(candidates)))
+            debug = False
+            pb = ProgressBar(maxval=max(center_freqs)).start()
+            i = 0
+            for i_fc, fc in enumerate(center_freqs):
+                if debug:
+                    fig = plt.figure()
+
+                fl_min = fc-fc*2./5.
+                fr_max = fc+fc*2./5.
+                widths = num.linspace(fl_min, fr_max, num_f_widths)
+
+                for i_width, width in enumerate(widths):
+                    i_candidate = 0
+                    mesh_fc[i] = fc
+                    mesh_fwidth[i] = width
+                    i += 1
+                    for source, candidate in candidates:
+                        candidate = candidate.copy()
+                        tstart = self.provider.timings[array_id].timings[0].t(mod, (source.depth, dist)) + event.time
+                        tend = self.provider.timings[array_id].timings[1].t(mod, (source.depth, dist)) + event.time
+                        filters = [
+                            ButterworthResponse(corner=float(fc+width*0.5), order=4, type='low'),
+                            ButterworthResponse(corner=float(fc-width*0.5), order=4, type='high')]
+                        settings.filters = filters
+                        candidate = settings.do_filter(candidate)
+                        candidate.chop(tmin=tstart, tmax=tend)
+                        candidate.shift(float(settings.correction))
+                        m, n, aproc, bproc = ref.misfit(candidate=candidate, setup=settings.misfit_setup, debug=True)
+                        aproc.set_codes(station='aproc')
+                        bproc.set_codes(station='bproc')
+                        if debug:
+                            ax = fig.add_subplot(len(test_depths)+1, 1, i+1)
+                            ax.plot(aproc.get_xdata(), aproc.get_ydata())
+                            ax.plot(bproc.get_xdata(), bproc.get_ydata())
+                        mf = m/n
+                        #misfits.append((source.depth, mf))
+                        misfits_array[i_fc][i_width][i_candidate] = mf
+                        i_candidate += 1
+                pb.update(fc)
+
+            pb.finish()
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            i_best_fits = num.argmin(misfits_array, 2)
+            print 'best fits: \n', i_best_fits
+            best_fits = num.min(misfits_array, 2)
+            #cmap = matplotlib.cm.get_cmap()
+            import pdb
+            pdb.set_trace()
+            xmesh, ymesh = num.meshgrid(mesh_fc, mesh_fwidth)
+            #c = (best_fits-num.min(best_fits))/(num.max(best_fits)-num.min(best_fits))
+            ax.scatter(xmesh, ymesh, best_fits*100)
+            #ax.scatter(mesh_fc, mesh_fwidth, c)
+            #ax.scatter(mesh_fc, mesh_fwidth, s=best_fits)
+            ax.set_xlabel('fc')
+            ax.set_ylabel('f_width')
+        plt.legend()
+        plt.show()
+
+
 if __name__=='__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Find depth.')

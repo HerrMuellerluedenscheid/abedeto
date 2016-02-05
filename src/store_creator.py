@@ -18,9 +18,13 @@ pjoin = os.path.join
 logging.basicConfig(level="INFO")
 logger = logging.getLogger("propose-store")
 
+class NoRay(Exception):
+    def __init__(self, context):
+        Exception.__init__(self, 'NoRay at ' + context)
+
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
                   source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2,
-                  run_ttt=False, simplify=False):
+                  run_ttt=False, simplify=False, phases=['P'], classic=True):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
     :param station: Station instance
@@ -55,6 +59,13 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
     setattr(_config, 'earthmodel_receiver_1d', mod)
 
     configs = []
+    if classic:
+        define_method = cake.PhaseDef
+    else:
+        define_method = cake.PhaseDef.classic
+
+    wanted = [define_method(ph) for ph in phases]
+
     for ident, prof in earthmodels_1d.items():
         configid = '%s_%s_%s' % (station.station, station_crust._ident, ident)
         config = copy.copy(_config)
@@ -76,18 +87,22 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         create_directory(dest_dir, force_overwrite)
         logger.info('Created store under: %s' % dest_dir)
 
-        mean_z = num.mean([config.source_depth_min, config.source_depth_max])
-
-        mean_dist = config.distance_min+(config.distance_max-config.distance_min)/2.
-        arrivals = config.earthmodel_1d.arrivals(phases=cake.PhaseDef('P'),
-                                                 distances=[mean_dist*cake.m2d],
-                                                 zstart=mean_z)
+        mean_z = num.mean((config.source_depth_min, config.source_depth_max))
+        mean_dist = num.mean((config.distance_min, config.distance_max))
+        arrivals = config.earthmodel_1d.arrivals(
+            phases=wanted, distances=[mean_dist * cake.m2d], zstart=mean_z)
         if len(arrivals)==0:
+            logger.warning(NoRay('d: %s, z: %s, %s phases: %s' %(mean_dist*cake.m2d,
+                                mean_z, 'classic' if classic else '', "|".join(phases))))
             slow = 0.1
+            slowness_taper = (0., 0., 1.3*slow, 1.5*slow)
+            z_turn = num.max(config.earthmodel_1d.profile('z'))
         else:
             slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
-
-        config.modelling_code_id=modelling_code_id
+            slowness_taper = (0., 0.5*slow, 1.3*slow, 1.5*slow)
+            z_turn = num.max(arrivals[0].zxt_path_subdivided()[0])
+        config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=z_turn*1.1)
+        config.modelling_code_id = modelling_code_id
         config.tabulated_phases=[
             TPDef(
                 id='begin',
@@ -104,11 +119,11 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         half_lapse_time = 70
         qs.time_region = (Timing('begin-%s' % (half_lapse_time*1.1)), Timing('begin+%s' % (half_lapse_time*1.1)))
         qs.cut = (Timing('begin-%s' % half_lapse_time), Timing('begin+%s' % half_lapse_time))
-        qs.slowness_window = (0., 0., slow+slow*0.3, slow+slow*0.5)
+        qs.slowness_window = slowness_taper
         qs.wavelet_duration_samples = 0.001
         qs.sw_flat_earth_transform = 1
         qs.filter_shallow_paths = 1
-        qs.filter_shallow_paths_depth = round(mean_dist/50000.)
+        qs.filter_shallow_paths_depth = float(z_turn * 0.25)
         qs.validate()
         config.validate()
         Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
