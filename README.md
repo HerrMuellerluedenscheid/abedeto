@@ -1,6 +1,6 @@
-# Array Beam Depth Tool
+## Array Beam Depth Tool
 
-## Installation
+### Installation
 
     sudo python setup.py install
 
@@ -9,7 +9,7 @@
 * [pyrocko](http://emolch.github.io/pyrocko/) 
 
 
-## Processing
+### Processing
 If you need help add a *--help* to the command call in order to get additional information.
 Initialize a project using the following command
 
@@ -29,8 +29,14 @@ should start querying the IRIS data center for available array data.
 
 You can let *abedeto* propose suitable greens function stores based on Crust2.0 profiles by running
 
-    abedeto stores --depths z_min:z_max:z_delta
+    abedeto stores
+    
+Set the depth range to test by appending
 
+    --depths z_min:z_max:z_delta
+
+to the previous command. Values are to be given in kilometer. Default is 0:15:1
+km.
 The proposed stores' config files contain a source and a receiver site model. These are 
 combinations of the crust2 models at the top and beneath the AK135 model. 
 You can modify those models as you please.
@@ -48,7 +54,7 @@ Most likely, you want to run the commands
 
 Having finished this, run
 
-    abedeto process [options]
+    abedeto process ARRAY_ID [options]
 
-to generate some figures which might help to judge about the depth of the event.
-
+to generate figures which might help to judge about the depth of the event
+recorded at array ARRAY/_ID.
