@@ -404,14 +404,26 @@ class Inverter():
     def __init__(self, provider, args):
         self.provider = provider
         self.args = args
+        self.results = {}
+
+
+    def get_crust_model_id(array_id, station, event):
+        station_crust = crust2x2.get_profile(station.lat, station.lon)
+        event_crust = crust2x2.get_profile(event.lat, event.lon)
+
 
     def invert(self, args):
+        center_freqs = num.arange(1., 9., 0.5)
+        num_f_widths = len(center_freqs)
+        m_array = None
+        n_array = None
         for array_id in self.provider.use:
-            try:
-                if args.array_id and array_id != args.array_id:
-                    continue
-            except AttributeError:
-                pass
+            #try:
+            if args.array_ids and array_id not in args.array_ids:
+                print 'skipping %s' % array_id
+                continue
+            #except AttributeError:
+            #    pass
             subdir = pjoin('array_data', array_id)
             settings_fn = pjoin(subdir, 'plot_settings.yaml')
             if os.path.isfile(settings_fn):
@@ -424,16 +436,6 @@ class Inverter():
                 engine = LocalEngine(store_superdirs=settings.store_superdirs)
             else:
                 engine = LocalEngine(use_config=True)
-            try:
-                store = engine.get_store(settings.store_id)
-            except seismosizer.NoSuchStore as e:
-                logger.info('%s ... skipping.' % e)
-                return
-            try:
-                store = engine.get_store(settings.store_id)
-            except seismosizer.NoSuchStore as e:
-                logger.info('%s ... skipping.' % e)
-                return
 
             if not settings.trace_filename:
                 settings.trace_filename = pjoin(subdir, 'beam.mseed')
@@ -442,10 +444,12 @@ class Inverter():
             align_phase = 'P'
             zoom_window = settings.zoom
             ampl_scaler = '4*standard deviation'
-            mod = store.config.earthmodel_1d
 
             zstart, zstop, inkr = settings.depths.split(':')
             test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
+            if m_array == None:
+                m_array = num.zeros((len(center_freqs), num_f_widths, len(test_depths)))
+                n_array = num.zeros((len(center_freqs), num_f_widths, len(test_depths)))
             traces = io.load(settings.trace_filename)
             event = model.load_events(settings.event_filename)
             assert len(event)==1
@@ -466,7 +470,20 @@ class Inverter():
                 logger.error('no matching stations found. %s %s' % []) 
 
             station = station[0]
-            targets = [station_to_target(station, quantity=settings.quantity, store_id=settings.store_id)]
+
+            if settings.store_id:
+                store_id = settings.store_id
+                print store_id
+            else:
+                store_id = self.get_crust_model_id(array_id, station, events)
+                print store_id
+            try:
+                store = engine.get_store(store_id)
+                mod = store.config.earthmodel_1d
+            except seismosizer.NoSuchStore as e:
+                logger.info('%s ... skipping.' % e)
+                return
+            targets = [station_to_target(station, quantity=settings.quantity, store_id=store_id)]
             try:
                 request = engine.process(targets=targets, sources=test_sources)
             except seismosizer.NoSuchStore as e:
@@ -509,9 +526,6 @@ class Inverter():
             ref = ref.chop(tstart, tend)
             misfits = []
 
-            center_freqs = num.arange(1., 9., 4.)
-            num_f_widths = len(center_freqs)
-
             mesh_fc = num.zeros(len(center_freqs)*num_f_widths*len(candidates))
             mesh_fwidth = num.zeros(len(center_freqs)*num_f_widths*len(candidates))
             misfits_array = num.zeros((len(center_freqs), num_f_widths, len(candidates)))
@@ -544,36 +558,58 @@ class Inverter():
                         candidate.chop(tmin=tstart, tmax=tend)
                         candidate.shift(float(settings.correction))
                         m, n, aproc, bproc = ref.misfit(candidate=candidate, setup=settings.misfit_setup, debug=True)
-                        aproc.set_codes(station='aproc')
-                        bproc.set_codes(station='bproc')
                         if debug:
+                            aproc.set_codes(station='aproc')
+                            bproc.set_codes(station='bproc')
                             ax = fig.add_subplot(len(test_depths)+1, 1, i+1)
                             ax.plot(aproc.get_xdata(), aproc.get_ydata())
                             ax.plot(bproc.get_xdata(), bproc.get_ydata())
                         mf = m/n
-                        #misfits.append((source.depth, mf))
                         misfits_array[i_fc][i_width][i_candidate] = mf
+                        m_array[i_fc][i_width][i_candidate] += m**2
+                        n_array[i_fc][i_width][i_candidate] += n**2
+                        depths_array[i_fc][i_width][i_candidate] = source.depth
                         i_candidate += 1
                 pb.update(fc)
-
             pb.finish()
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            i_best_fits = num.argmin(misfits_array, 2)
-            print 'best fits: \n', i_best_fits
-            best_fits = num.min(misfits_array, 2)
-            for 
-            #cmap = matplotlib.cm.get_cmap()
-            import pdb
-            pdb.set_trace()
-            xmesh, ymesh = num.meshgrid(mesh_fc, mesh_fwidth)
-            #c = (best_fits-num.min(best_fits))/(num.max(best_fits)-num.min(best_fits))
-            ax.scatter(xmesh, ymesh, best_fits*100)
-            #ax.scatter(mesh_fc, mesh_fwidth, c)
-            #ax.scatter(mesh_fc, mesh_fwidth, s=best_fits)
-            ax.set_xlabel('fc')
-            ax.set_ylabel('f_width')
-        plt.legend()
+
+        m = num.sqrt(m_array)
+        n = num.sqrt(n_array)
+        misfits_array = m/n
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        i_best_fits = num.argmin(misfits_array, 2)
+        best_fits = num.min(misfits_array, 2)
+        print misfits_array
+        ii0 = num.repeat(num.arange(i_best_fits.shape[0]), i_best_fits.shape[1])
+        ii1 = num.tile(num.arange(i_best_fits.shape[1]), i_best_fits.shape[0])
+        ii2 = i_best_fits.flatten()
+        best_fits_arg = misfits_array[ii0, ii1, ii2]
+        best_depths = depths_array[ii0, ii1, ii2]
+        self.results[array_id] = (best_fits_arg, best_depths)
+        cmap = matplotlib.cm.get_cmap('RdYlBu')
+        norm_mf = matplotlib.colors.Normalize(vmin=best_fits_arg.min(), vmax=best_fits_arg.max())
+        norm_z = matplotlib.colors.Normalize(vmin=test_depths.min(), vmax=test_depths.max())
+
+        colors = cmap(norm_z(best_depths))
+        reshaped = best_fits_arg.reshape(misfits_array.shape[0], misfits_array.shape[1])
+        points = ax.scatter(mesh_fc, mesh_fwidth, (1-norm_mf(best_fits_arg))*130, c=colors, cmap=cmap)
+        info = 'misfit range (=circle size): %1.2f - %1.2f' % (best_fits_arg.min(), best_fits_arg.max())
+        ax.text(
+            0.01, 0.99, info, transform=ax.transAxes, verticalalignment='top', horizontalalignment='left')
+        ax.set_ylim([mesh_fwidth.min(), mesh_fwidth.max()])
+        ax.set_xlim([mesh_fc.min(), mesh_fc.max()])
+        #ax.set_xscale('log')
+        ax.set_xlabel('fc')
+
+        #ax.set_yscale('log')
+        ax.set_ylabel('f_width')
+
+        mappable = matplotlib.cm.ScalarMappable(cmap=cmap)
+        mappable.set_array(best_depths)
+        plt.colorbar(mappable)
+        plt.legend('source depth')
+        fig.savefig('inversion.png')
         plt.show()
 
 if __name__=='__main__':

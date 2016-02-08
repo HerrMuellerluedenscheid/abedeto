@@ -285,6 +285,57 @@ if __name__=='__main__':
                                 action='store_true')
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
+    inversion_parser = sp.add_parser('invert', help='invert ')#, parents=[parser])
+    inversion_parser.add_argument('--array-ids',
+                                help='array_id to process',
+                                dest='array_ids', required=False, nargs='+',
+                                type=str, default='')
+    inversion_parser.add_argument('--store-superdirs',
+                        help='super directory where to look for stores',
+                        dest='store_superdirs', nargs='*',
+                        required=False)
+    inversion_parser.add_argument('--store',
+                        help='name of store id',
+                        dest='store_id',
+                        required=False)
+    inversion_parser.add_argument('--depths',
+                        help='testing depths in km. zstart:zstop:delta, default 0:15:1',
+                        required=False)
+    #inversion_parser.add_argument('--filter',
+    #                    help='4th order butterw. default: "0.7:4.5"',
+    #                    required=False)
+    #inversion_parser.add_argument('--correction', required=False,
+    #                    help='a global correction in time [s]')
+    #inversion_parser.add_argument('--gain', required=False,
+    #                    help='gain factor', default=1.,
+    #                            type=float)
+
+    ## MUSS WIEDER REIN NACH GRUPPIERUNG
+    #inversion_parser.add_argument('--normalize',
+    #                    help='normalize traces to 1',
+    #                    action='store_true',
+    #                    required=False)
+    #inversion_parser.add_argument('--force-nearest-neighbor',
+    #                    help='handles OOB',
+    #                    dest='force_nearest_neighbor',
+    #                    default=False,
+    #                    action='store_true',
+    #                    required=False)
+    inversion_parser.add_argument('--auto-caption',
+                        help='Add a caption to figure with basic info',
+                        dest='auto_caption',
+                        default=True,
+                        action='store_true',
+                        required=False)
+    inversion_parser.add_argument('--out-filename',
+                        help='file to store image',
+                        dest='save_as',
+                        required=False)
+
+    inversion_parser.add_argument('--cc-align', dest='cc_align',
+                        help='use x seconds cross correlation to align traces',
+                        type=float, default=0., required=False)
+
     process_parser = sp.add_parser('process', help='Create images')#, parents=[parser])
     process_parser.add_argument('--array_id',
                                 help='array_id to process',
@@ -384,8 +435,6 @@ if __name__=='__main__':
                         dest='array_id',
                         required=True)
 
-    invert_parser = sp.add_parser('invert', help='Invert')
-
     args = parser.parse_args()
 
     logging.basicConfig(level=args.log.upper())
@@ -402,8 +451,8 @@ if __name__=='__main__':
     if args.cmd == 'beam':
         beam(args)
 
-    #if args.cmd == 'process':
-    #    process(args)
+    if args.cmd == 'process':
+        process(args)
 
     if args.cmd == 'map':
         mapify(args)
@@ -411,6 +460,6 @@ if __name__=='__main__':
     if args.cmd == 'bounds':
         get_bounds(args)
 
-    if args.cmd == 'process':
+    if args.cmd == 'invert':
         invert(args)
 
