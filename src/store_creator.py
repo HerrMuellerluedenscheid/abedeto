@@ -22,6 +22,11 @@ class NoRay(Exception):
     def __init__(self, context):
         Exception.__init__(self, 'NoRay at ' + context)
 
+
+def model_has_cmb(mod):
+    disks = mod.discontinuities()
+    return 'cmb' in [d.name for d in disks]
+
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
                   source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2,
                   run_ttt=False, simplify=False, phases=['P'], classic=True):
@@ -102,29 +107,36 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
             slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
             slowness_taper = (0., 0.5*slow, 1.3*slow, 1.5*slow)
             z_turn = num.max(arrivals[0].zxt_path_subdivided()[0])
+
         config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=z_turn*1.1)
+        begin_phase_defs = 'P,P\\,PP'
+        if model_has_cmb(config.earthmodel_1d):
+            begin_phase_defs += ',Pv_(cmb)p'
         config.modelling_code_id = modelling_code_id
         config.tabulated_phases=[
             TPDef(
                 id='begin',
-                definition='P,P\\,Pv_(cmb)p'),
+                definition=begin_phase_defs),
             TPDef(
                 id='end',
                 definition='2.5'),
             TPDef(
+                id='PP',
+                definition='PP'),
+            TPDef(
                 id='P',
-                definition='!P')]
+                definition='P')]
 
         qs = qseis.QSeisConfig()
         qs.qseis_version = config.modelling_code_id.split('.')[1]
-        half_lapse_time = 70
+        half_lapse_time = 40
         qs.time_region = (Timing('begin-%s' % (half_lapse_time*1.1)), Timing('begin+%s' % (half_lapse_time*1.1)))
         qs.cut = (Timing('begin-%s' % half_lapse_time), Timing('begin+%s' % half_lapse_time))
         qs.slowness_window = slowness_taper
         qs.wavelet_duration_samples = 0.001
         qs.sw_flat_earth_transform = 1
         qs.filter_shallow_paths = 1
-        qs.filter_shallow_paths_depth = float(z_turn * 0.25)
+        qs.filter_shallow_paths_depth = float(z_turn * 0.2)
         qs.validate()
         config.validate()
         Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
