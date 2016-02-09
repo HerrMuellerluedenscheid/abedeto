@@ -1,10 +1,13 @@
 import os
 import shutil
 from collections import defaultdict
-from pyrocko.fdsn import ws
+from pyrocko.fdsn import ws, station as fdsnstation
 from pyrocko import model
 from pyrocko import cake
 from pyrocko import orthodrome as ortho
+from pyrocko import io
+from pyrocko import orthodrome as ortho
+from pyrocko import util as putil
 from pyrocko.gf.meta import Timing as PyrockoTiming
 from pyrocko.guts import Object, String, Float, List, Dict
 import logging
@@ -158,11 +161,13 @@ class DataProvider(Object):
         """
         use = []
         ts = {}
+        unit = 'M'
         if all([timing, length]) == None:
             raise Exception('Define one of "timing" and "length"')
         prefix = prefix or ''
         directory = pjoin(prefix, directory)
         create_directory(directory, force)
+        pzresponses = {}
         for site, array_data_provder in self.providers.items():
             logger.info('requesting data from site %s' % site)
             for array_id, codes in array_data_provder.items():
@@ -180,7 +185,6 @@ class DataProvider(Object):
                 except ws.EmptyResult as e:
                     logging.error('%s on %s. skip' %(e, array_id))
                     continue
-
                 stations = st.get_pyrocko_stations()
                 min_dist = min(
                     [ortho.distance_accurate50m(s, event) for s in stations])
@@ -202,13 +206,24 @@ class DataProvider(Object):
                     with open(fn, 'w') as f:
                         f.write(d.read())
                         f.close()
+                    trs = io.load(fn, getdata=False)
+                    for tr in trs:
+                        try:
+                            pzresponse = st.get_pyrocko_response(
+                                nslc=tr.nslc_id, timespan=(tr.tmin, tr.tmax),
+                                fake_input_units=unit)
+                            pzresponses[tr.nslc_id] = pzresponse
+                        except fdsnstation.NoResponseInformation as e:
+                            logger.warn("no response information: %s" % e)
+                            pass
+                        except fdsnstation.MultipleResponseInformation as e:
+                            logger.warn("MultipleResponseInformation: %s" % e)
+                            pass
                     model.dump_stations(stations, pjoin(sub_directory, 'stations.pf'))
-                    #st.dump(filename=pjoin(sub_directory, 'fdsn_request.yaml'))
                     if dump_config and timing:
                         t = Timings(list(timing))
                         ts[array_id] = t
                         t.validate()
-                        #t.dump(filename=pjoin(sub_directory, 'request.conf'))
                     if array_id not in use:
                         use.append(array_id)
                 except ws.EmptyResult as e:
@@ -229,11 +244,12 @@ if __name__=="__main__":
     parser.add_argument('--want', help='all|id1,id2,id3....', default='all')
     args = parser.parse_args()
     length = 1000.
+    print 'use first event in list'
     e = list(model.Event.load_catalog(args.events))[0]
     provider = DataProvider(channels='*Z')
-    tmin = CakeTiming(phase_selection='first(p|P|PP)-100', fallback_time=0.001)
-    tmax = CakeTiming(phase_selection='first(p|P|PP)+520', fallback_time=1000.)
+    tmin = CakeTiming(phase_selection='first(p|P|PP)-10', fallback_time=0.001)
+    tmax = CakeTiming(phase_selection='first(p|P|PP)+52', fallback_time=1000.)
     want = args.want
     if want!='all':
         want = want.split(',')
-    provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, site=args.site, want=want)
+    provider.download(e, timing=(tmin, tmax), dump_config=True, force=True, want=want)
