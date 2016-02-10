@@ -23,7 +23,7 @@ logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
 arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
             'gain', 'gain_record', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom',
-           'title', 'save_as', 'color', 'auto_caption', 'quantity']
+           'title', 'save_as', 'color', 'auto_caption', 'quantity', 'cc_align']
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',
@@ -356,7 +356,9 @@ def plot(settings, show=False):
     ax.invert_yaxis()
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
-        fig.savefig(settings.save_as%{'array_id': '.'.join(station.nsl())}, dpi=160, bbox_inches='tight')
+        options = settings.__dict__
+        options.update({'array_id': '.'.join(station.nsl())})
+        fig.savefig(settings.save_as % options, dpi=160, bbox_inches='tight')
     if show:
         plt.show()
 

@@ -273,6 +273,9 @@ if __name__=='__main__':
                                 help='settings file',
                                 default=False,
                                 required=False)
+    process_parser.add_argument('--cc_align',
+                        help='dummy argument at the moment',
+                        required=False)
     #process_parser.add_argument('--event',
     #                    help='name of file containing event catalog',
     #                    required=True)
