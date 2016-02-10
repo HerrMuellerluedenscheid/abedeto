@@ -265,8 +265,8 @@ if __name__=='__main__':
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
     process_parser = sp.add_parser('process', help='Create images')
-    process_parser.add_argument('--array_id',
-                                help='array_id to process',
+    process_parser.add_argument('--array-id',
+                                help='array-id to process',
                                 required=False,
                                 default=False)
     process_parser.add_argument('--settings',
@@ -349,7 +349,6 @@ if __name__=='__main__':
                         required=True)
 
     bounds_parser.add_argument('--array-id',
-                        help='array id',
                         dest='array_id',
                         required=True)
 
