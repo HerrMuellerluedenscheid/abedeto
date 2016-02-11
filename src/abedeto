@@ -6,7 +6,8 @@ import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
 from pyrocko.guts import Object, Dict, String, List, load as guts_load
-from abedeto.util import create_directory
+from pyrocko.gf.store import remake_dir
+#from abedeto.util import create_directory
 from abedeto.request import DataProvider, CakeTiming
 import logging
 from abedeto.array_map import ArrayMap
@@ -61,8 +62,7 @@ def init(args):
             logger.warn("event name is empty. Skipping...")
             continue
 
-        create_directory(name, args.force)
-        create_directory(name, args.force)
+        remake_dir(name, args.force)
 
         model.Event.dump_catalog([e], pjoin(name, event_fn))
         if args.download:
@@ -77,13 +77,13 @@ def download(args, event=None, prefix=''):
     provider = DataProvider()
     try:
         settings = args.download_settings
-        provider.download(event, settings=settings)
+        provider.download(event, settings=settings, force=args.force)
     except (AttributeError, TypeError):
         e = event
         provider = DataProvider()
         tmin = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-80', fallback_time=100.)
         tmax = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+120', fallback_time=600.)
-        provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True)
+        provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True, force=args.force)
 
 
 def beam(args):
@@ -224,6 +224,14 @@ if __name__=='__main__':
                                 help='Load download settings.',
                                 dest='download_settings',
                                 default=False)
+    download_parser.add_argument('--get-responses',
+                            action='store_true',
+                            default=False,
+                            help='get station meta infos')
+    download_parser.add_argument('--force',
+                            action='store_true',
+                            default=False,
+                            help='force overwrite')
 
     beam_parser = sp.add_parser('beam', help='Beam forming')
     beam_parser.add_argument('--map_filename', help='filename of map',

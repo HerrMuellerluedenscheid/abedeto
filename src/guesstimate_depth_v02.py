@@ -106,7 +106,7 @@ class PlotSettings(Object):
     def do_filter(self, tr):
         for f in self.filters:
             tr = tr.transfer(transfer_function=f,
-                             tfade=20,
+                             tfade=10,
                              cut_off_fading=False)
         return tr
 

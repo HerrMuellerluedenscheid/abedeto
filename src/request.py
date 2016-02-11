@@ -8,6 +8,8 @@ from pyrocko import io
 from pyrocko import orthodrome as ortho
 from pyrocko.guts import Object, String, Float, List, Dict
 import logging
+import progressbar
+
 
 pjoin = os.path.join
 logging.basicConfig(level='INFO')
@@ -154,7 +156,8 @@ class DataProvider(Object):
                           'bgr': bgr_arrays}
 
     def download(self, event, directory='array_data', timing=None, length=None,
-                 want='all', force=False, prefix=False, dump_config=False):
+                 want='all', force=False, prefix=False, dump_config=False,
+                 get_responses=False):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
         use = []
@@ -178,7 +181,7 @@ class DataProvider(Object):
                     codes = [codes]
                 selection = [
                     c + tuple((event.time, event.time+1000.)) for c in codes]
-                logger.debug('selection: ', selection)
+                logger.debug('selection: %s' % selection)
                 try:
                     st = ws.station(site=site, selection=selection)
                 except ws.EmptyResult as e:
@@ -208,21 +211,32 @@ class DataProvider(Object):
                     with open(fn, 'w') as f:
                         f.write(d.read())
                         f.close()
-                    trs = io.load(fn, getdata=False)
-                    for tr in trs:
-                        try:
-                            pzresponse = st.get_pyrocko_response(
-                                nslc=tr.nslc_id,
-                                timespan=(tr.tmin, tr.tmax),
-                                fake_input_units=unit)
-                            e = pzresponse
-                        except fdsnstation.NoResponseInformation as e:
-                            logger.warn("no response information: %s" % e)
-                            pass
-                        except fdsnstation.MultipleResponseInformation as e:
-                            logger.warn("MultipleResponseInformation: %s" % e)
-                            pass
-                        pzresponses[tr.nslc_id] = e
+                    if get_responses:
+                        trs = io.load(fn, getdata=False)
+                        logger.info('Request responses from %s' % site)
+                        pb = progressbar.ProgressBar(maxval=len(trs)).start()
+                        for i_tr, tr in enumerate(trs):
+                            try:
+                                st = ws.station(
+                                    site=site, selection=selection, level='response')
+                                pzresponse = st.get_pyrocko_response(
+                                    nslc=tr.nslc_id,
+                                    timespan=(tr.tmin, tr.tmax),
+                                    fake_input_units=unit)
+                                pzresponse.regularize()
+                            except fdsnstation.NoResponseInformation as e:
+                                logger.warn("no response information: %s" % e)
+                                pzresponse = None
+                                pass
+                            except fdsnstation.MultipleResponseInformation as e:
+                                logger.warn("MultipleResponseInformation: %s" % e)
+                                pzresponse = None
+                                pass
+                            pzresponses[tr.nslc_id] = pzresponse
+                            pzresponses[tr.nslc_id].dump_xml(filename=pjoin(
+                                sub_directory, 'response-%s.stationxml' % site))
+                            pb.update(i_tr)
+                        pb.finish()
                     model.dump_stations(
                         stations, pjoin(sub_directory, 'stations.pf'))
 
