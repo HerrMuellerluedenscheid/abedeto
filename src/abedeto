@@ -143,7 +143,11 @@ def propose_stores(args):
         provider = DataProvider.load(filename='request.yaml')
         for array_id in provider.use:
             directory = pjoin(array_data, array_id)
-            station = model.load_stations(pjoin(directory, 'array_center.pf'))
+            fn_array_center = pjoin(directory, 'array_center.pf')
+            if not os.path.isfile(fn_array_center):
+                logger.error("No such file: %s. Probably, you need to run 'abedeto beam', first." % fn_array_center)
+                return
+            station = model.load_stations(fn_array_center)
             station = one_or_error(station)
             configids = store_creator.propose_store(station, **store_kwargs)
             store_mapper.mapping[array_id] = configids
