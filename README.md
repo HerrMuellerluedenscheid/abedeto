@@ -34,7 +34,7 @@ to start querying IRIS, Geofon and BGR data centers for available array data.
 
     abedeto beam
 
-*abedeto* can propose suitable Green's function stores based on Crust2.0 profiles:
+*abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
     abedeto stores
 
@@ -56,16 +56,16 @@ After that you can process them as it is explained in the
 [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html).
 Most likely, you want to run the commands
 
-    fomosto ttt
-    fomosto build
+    fomosto ttt			# Interpolate travel time tables
+    fomosto build		# Start generating data bases
 
 Having finished this, run
 
     abedeto process [options]
 
 to generate figures which might help to judge about the depth of the event. They are created within the project directory in PNG format.
-Probably, synthetic and recorded traces are not well aligned. This can be corrected by
-appending a ``--correction [some_seconds]`` to the last command.
+Probably, synthetic and recorded traces are not well aligned. This can be corrected by appending a ``--correction [some_seconds]`` to the last command.
+Currently, no restitution is performed. However, the quantity can be changed using ``--quantity [displacement|velocity]`` which either integrates the beam or differentiates the synthetic traces, respectively. It is possible to retrieve response functions for each trace using ``--get-repsponses``. These can be found afterwards in the underlying data directory and can be used to restitute, manually.
 
 ### General Information
 Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
@@ -74,7 +74,6 @@ Running the init command on events where the *name* is not specified will fail. 
 
 In order to avoid amiguity between projects this works only when one event is present in the given file.
 By default, existing directories will not be overwritten unless appending ``--force`` to the command.
-
 
 The hierarchy within the directory looks as follows::
 
@@ -99,4 +98,3 @@ The hierarchy within the directory looks as follows::
            :				# source and receiver site
 
 
-### Notes 
