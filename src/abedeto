@@ -6,7 +6,7 @@ import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
 from pyrocko.guts import Object, Dict, String, List, load as guts_load
-from pyrocko.gf.store import remake_dir
+from pyrocko.gf.store import remake_dir, CannotCreate
 #from abedeto.util import create_directory
 from abedeto.request import DataProvider, CakeTiming
 import logging
@@ -315,6 +315,9 @@ if __name__=='__main__':
     process_parser.add_argument('--gain', required=False,
                         help='gain factor', default=1.,
                                 type=float)
+    process_parser.add_argument('--zoom', required=False,
+                                help='time window to look at. default -7:15',
+                                default='-7:15')
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
@@ -367,21 +370,24 @@ if __name__=='__main__':
 
     logging.basicConfig(level=args.log.upper())
 
-    if args.cmd == 'init':
-        init(args)
+    try:
+        if args.cmd == 'init':
+            init(args)
 
-    if args.cmd == 'download':
-        download(args)
+        if args.cmd == 'download':
+            download(args)
 
-    if args.cmd == 'stores':
-        propose_stores(args)
+        if args.cmd == 'stores':
+            propose_stores(args)
 
-    if args.cmd == 'beam':
-        beam(args)
+        if args.cmd == 'beam':
+            beam(args)
 
-    if args.cmd == 'process':
-        process(args)
+        if args.cmd == 'process':
+            process(args)
 
-    if args.cmd == 'bounds':
-        get_bounds(args)
+        if args.cmd == 'bounds':
+            get_bounds(args)
+    except CannotCreate as e:
+        logger.error('%s. Run with --force to overwrite existing data.' % e)
 
