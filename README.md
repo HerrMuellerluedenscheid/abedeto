@@ -71,22 +71,22 @@ appending a *--correction [some_seconds]* to the last command.
 
 The hierarchy within the directory looks as follows::
 
-    ProjectDir/			# Project directory
+    ProjectDir/				# Project directory
         |--array_data
            |--"SOME_ID1"		# Some Array ID
            |--"SOME_ID2"
-               |--array_center.pf       # Array center location used for beam forming
-               |--beam.mseed            # Beam
-               |--stations.pf           # Station meta information
-               |--traces.mseed          # Raw traces
+               |--array_center.pf	# Array center location used for beam forming
+               |--beam.mseed		# Beam
+               |--stations.pf		# Station meta information
+               |--traces.mseed		# Raw traces
            :
            :
 
-        |--event.pf		        # Event file
-        |--store-mapping                # Maps store ids to array ids
-        |--request.yaml		        # Information concerning data selection
+        |--event.pf			# Event file
+        |--store-mapping		# Maps store ids to array ids
+        |--request.yaml			# Information concerning data selection
         |--stores
-           |--StoreID1                  # Green's function stores
-           |--StoreID2	                # The name combines the array ID and 
+           |--StoreID1			# Green's function stores
+           |--StoreID2			# The name combines the array ID and 
            :				# the ID of the Crust2x2 tile at the
            :				# source and receiver site

@@ -129,7 +129,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
 
         qs = qseis.QSeisConfig()
         qs.qseis_version = config.modelling_code_id.split('.')[1]
-        half_lapse_time = 40
+        half_lapse_time = 55
         qs.time_region = (Timing('begin-%s' % (half_lapse_time*1.1)), Timing('begin+%s' % (half_lapse_time*1.1)))
         qs.cut = (Timing('begin-%s' % half_lapse_time), Timing('begin+%s' % half_lapse_time))
         qs.slowness_window = slowness_taper
