@@ -69,14 +69,7 @@ class PlotSettings(Object):
         except:
             pass
 
-        for arg in arglist:
-            try:
-                val = getattr(args, arg)
-                if val:
-                    kwargs.update({arg: val})
-            except AttributeError:
-                logger.debug('%s not defined' % arg)
-                continue
+        kwargs.update(self.process_arglist(args))
         for arg, v in kwargs.items():
             setattr(self, arg, v)
 
@@ -89,19 +82,8 @@ class PlotSettings(Object):
         filters = [
             ButterworthResponse(corner=float(lp), order=4, type='low'),
             ButterworthResponse(corner=float(hp), order=4, type='high')]
-
-        kwargs = {}
-        for arg in arglist:
-            try:
-                val = getattr(args, arg)
-                if val:
-                    kwargs.update({arg: val})
-            except AttributeError:
-                logger.debug('%s not defined' % arg)
-                continue
-
-        return cls(filters=filters,
-                   **kwargs)
+        kwargs = cls.process_arglist(args)
+        return cls(filters=filters, **kwargs)
 
     def do_filter(self, tr):
         for f in self.filters:
@@ -109,6 +91,23 @@ class PlotSettings(Object):
                              tfade=10,
                              cut_off_fading=False)
         return tr
+
+    @staticmethod
+    def process_arglist(args):
+        kwargs = {}
+        for arg in arglist:
+            try:
+                val = getattr(args, arg)
+                if arg=='zoom' and val:
+                    val = val.split(':')
+                    val = map(float, val)
+                if val:
+                    kwargs.update({arg: val})
+            except AttributeError:
+                logger.debug('%s not defined' % arg)
+                continue
+
+        return kwargs
 
 class GaussNotch(FrequencyResponse):
     def __init__(self, center, fwhm):
@@ -215,7 +214,8 @@ def plot(settings, show=False):
                 mod_targets.append(t)
             request = engine.process(targets=mod_targets, sources=test_sources)
         else:
-            raise error
+            logger.error("%s: %s" % (error, ".".join(station.nsl())))
+            return
 
     alldepths = list(test_depths)
     depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
@@ -256,7 +256,7 @@ def plot(settings, show=False):
         ax.plot(xdata, ydata, c='black', linewidth=1., alpha=1.)
         if False:
             ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color='black', alpha=0.5)
-        ax.text(zoom_window[0]*1.09, y_pos, '%i' % (s.depth/1000.), horizontalalignment='right') #, fontsize=12.)
+        ax.text(zoom_window[0]*1.09, y_pos, '%1.1f' % (s.depth/1000.), horizontalalignment='right') #, fontsize=12.)
         if False:
             mod = store.config.earthmodel_1d
             label = 'pP'
@@ -320,10 +320,10 @@ def plot(settings, show=False):
         zrange = zmax - zmin
         ax.set_ylim((zmin-zrange*0.2, zmax+zrange*0.2))
         ax.set_xlabel('Time [s]')
-        ax.text(-0.08, 0.6, 'Source depth [km]',
+        ax.text(0.0, 0.6, 'Source depth [km]',
                 rotation=90,
-                horizontalalignment='right',
-                transform=ax.transAxes) #, fontsize=12.)
+                horizontalalignment='left',
+                transform=fig.transFigure) #, fontsize=12.)
 
     if fill:
         ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color=settings.color, alpha=0.5)
