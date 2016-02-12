@@ -1,7 +1,5 @@
 ## Array Beam Depth Tool
 
-A little helper to estimate the depth of shallow earthquakes.
-
 ### Prerequisites:
 
 * [pyrocko](http://emolch.github.io/pyrocko/)
@@ -17,7 +15,7 @@ modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/p
     sudo python setup.py install
 
 ### Processing
-In general: If you need help add a *--help* to the command call in order to get additional information.
+In general: If you need help add a ``--help`` to the command call in order to get additional information.
 
 Initialize a project:
 
@@ -36,7 +34,7 @@ to start querying IRIS, Geofon and BGR data centers for available array data.
 
     abedeto beam
 
-You can let *abedeto* propose suitable greens function stores based on Crust2.0 profiles for you by running
+*abedeto* can propose suitable Green's function stores based on Crust2.0 profiles:
 
     abedeto stores
 
@@ -45,7 +43,7 @@ Set the depth range to test by appending
         --depths z_min:z_max:z_delta
 
 to the previous command. Values are to be given in kilometers. Default is 0:15:1
-km. This is needed 
+km.
 The proposed stores' config files contain a source and a receiver site model. These are 
 combinations of the crust2 models at the top and beneath the AK135 model. 
 You can modify those models as you please.
@@ -65,9 +63,18 @@ Having finished this, run
 
     abedeto process [options]
 
-to generate first figures which might help to judge about the depth of the event.
+to generate figures which might help to judge about the depth of the event. They are created within the project directory in PNG format.
 Probably, synthetic and recorded traces are not well aligned. This can be corrected by
-appending a *--correction [some_seconds]* to the last command.
+appending a ``--correction [some_seconds]`` to the last command.
+
+### General Information
+Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
+
+    abedeto init catalog.pf --name
+
+In order to avoid amiguity between projects this works only when one event is present in the given file.
+By default, existing directories will not be overwritten unless appending ``--force`` to the command.
+
 
 The hierarchy within the directory looks as follows::
 
@@ -90,3 +97,6 @@ The hierarchy within the directory looks as follows::
            |--StoreID2			# The name combines the array ID and 
            :				# the ID of the Crust2x2 tile at the
            :				# source and receiver site
+
+
+### Notes 
