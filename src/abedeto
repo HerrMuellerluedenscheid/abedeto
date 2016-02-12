@@ -130,8 +130,9 @@ def propose_stores(args):
                   'source_depth_max': sdmax,
                   'source_depth_delta': sddelta,
                   'sample_rate': args.sample_rate,
-                  'force_overwrite': args.force_overwrite,
+                  'force': args.force,
                   'run_ttt': args.ttt,
+                  'force': args.force,
                   'simplify': args.simplify}
 
     if args.station:
@@ -259,10 +260,9 @@ if __name__=='__main__':
     store_parser.add_argument('--sampling-rate', dest='sample_rate', type=float,
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
-    store_parser.add_argument('--force-store',
-                                dest='force_overwrite',
+    store_parser.add_argument('--force', dest='force', default=False,
                                 help='overwrite existent stores',
-                                action='store_false')
+                                action='store_true')
     store_parser.add_argument('--events',
                                 dest='events',
                                 help='create stores that are suitable for all events in this file')
@@ -365,7 +365,6 @@ if __name__=='__main__':
     bounds_parser.add_argument('--events',
                         help='events filename',
                         required=True)
-
     bounds_parser.add_argument('--array-id',
                         dest='array_id',
                         required=True)
