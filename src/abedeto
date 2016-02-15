@@ -53,16 +53,16 @@ def init(args):
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
     for i_e, e in enumerate(events):
-        if e.name:
-            name = e.name
-        elif args.name:
+        if args.name is not None:
             name = args.name
             e.name = name
+        elif e.name:
+            name = e.name
         else:
             logger.warn("event name is empty. Skipping...")
             continue
-
         remake_dir(name, args.force)
+        remake_dir(pjoin(name, stores_superdir), args.force)
 
         model.Event.dump_catalog([e], pjoin(name, event_fn))
         if args.download:
@@ -206,7 +206,7 @@ if __name__=='__main__':
     sp = parser.add_subparsers(dest='cmd')
     init_parser = sp.add_parser('init', help='create a new project')
     init_parser.add_argument('events', help='Event you don\'t know the depth of')
-    init_parser.add_argument('--name', help='name')
+    init_parser.add_argument('--name', help='name', default=None)
     init_parser.add_argument('--download',
                             action='store_true',
                             default=False,
