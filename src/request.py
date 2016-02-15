@@ -8,7 +8,11 @@ from pyrocko import io
 from pyrocko import orthodrome as ortho
 from pyrocko.guts import Object, String, Float, List, Dict
 import logging
-import progressbar
+try:
+    import progressbar
+except ImportError:
+    logger.debug('progressbar module not available')
+    progressbar = False
 
 
 pjoin = os.path.join
@@ -215,7 +219,8 @@ class DataProvider(Object):
                     if get_responses:
                         trs = io.load(fn, getdata=False)
                         logger.info('Request responses from %s' % site)
-                        pb = progressbar.ProgressBar(maxval=len(trs)).start()
+                        if progressbar:
+                            pb = progressbar.ProgressBar(maxval=len(trs)).start()
                         for i_tr, tr in enumerate(trs):
                             try:
                                 st = ws.station(
@@ -236,8 +241,10 @@ class DataProvider(Object):
                             pzresponses[tr.nslc_id] = pzresponse
                             pzresponses[tr.nslc_id].dump_xml(filename=pjoin(
                                 sub_directory, 'response-%s.stationxml' % site))
-                            pb.update(i_tr)
-                        pb.finish()
+                            if progressbar:
+                                pb.update(i_tr)
+                        if progressbar:
+                            pb.finish()
                     model.dump_stations(
                         stations, pjoin(sub_directory, 'stations.pf'))
 
