@@ -105,7 +105,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
             z_turn = num.max(config.earthmodel_1d.profile('z'))
         else:
             slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
-            slowness_taper = (0., 0.5*slow, 1.3*slow, 1.5*slow)
+            slowness_taper = (0.3*slow, 0.5*slow, 1.5*slow, 1.7*slow)
             z_turn = num.max(arrivals[0].zxt_path_subdivided()[0])
 
         config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=z_turn*1.1)
