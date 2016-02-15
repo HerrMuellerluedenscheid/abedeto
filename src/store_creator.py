@@ -4,10 +4,10 @@ import numpy as num
 import math
 from pyrocko import crust2x2, orthodrome as ortho
 from pyrocko.fomosto import qseis
-from pyrocko.gf.store import Store
+from pyrocko.gf.store import Store, remake_dir
 from pyrocko.gf.meta import Timing, ConfigTypeA, TPDef
 from pyrocko import cake
-from util import create_directory
+#from util import create_directory
 from collections import defaultdict
 import copy
 import tempfile
@@ -28,7 +28,7 @@ def model_has_cmb(mod):
     return 'cmb' in [d.name for d in disks]
 
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
-                  source_depth_delta=1., sample_rate=10., force_overwrite=False, numdists=2,
+                  source_depth_delta=1., sample_rate=10., force=False, numdists=2,
                   run_ttt=False, simplify=False, phases=['P'], classic=True):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
@@ -89,8 +89,8 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         setattr(config, 'earthmodel_1d', mod)
         configs.append(config)
         config.id = configid
-        dest_dir = pjoin(superdir, config.id) 
-        create_directory(dest_dir, force_overwrite)
+        dest_dir = pjoin(superdir, config.id)
+        remake_dir(dest_dir, force)
         logger.info('Created store under: %s' % dest_dir)
 
         mean_z = num.mean((config.source_depth_min, config.source_depth_max))
@@ -175,4 +175,4 @@ if __name__=="__main__":
 
     events = list(Event.load_catalog(args.events))
 
-    propose_store(s, events, superdir=args.superdir, force_overwrite=args.force)
+    propose_store(s, events, superdir=args.superdir, force=args.force)
