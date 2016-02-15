@@ -111,7 +111,7 @@ class DataProvider(Object):
                                ('IM', 'EKR*', '', channels)],
                        'ESK1': ('IM', 'EKA?', '', channels),
                        'ILAR': ('IM', 'IL*', '', channels),
-                       'IMA': ('IM', 'IM0?', '', channels),
+                       'IMAR': ('IM', 'IM0?', '', channels),
                        'NIA': ('IM', 'I56H?', '', channels),
                        'PFIA': [('IM', 'I57H?', '', channels),
                                 ('IM', 'I57L?', '', channels)],
