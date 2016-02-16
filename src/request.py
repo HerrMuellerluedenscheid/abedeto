@@ -8,16 +8,18 @@ from pyrocko import io
 from pyrocko import orthodrome as ortho
 from pyrocko.guts import Object, String, Float, List, Dict
 import logging
-try:
-    import progressbar
-except ImportError:
-    logger.debug('progressbar module not available')
-    progressbar = False
 
 
 pjoin = os.path.join
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('data-request')
+
+
+try:
+    import progressbar
+except ImportError:
+    logger.debug('progressbar module not available')
+    progressbar = False
 
 
 class CakeTiming(Object):
