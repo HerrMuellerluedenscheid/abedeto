@@ -7,8 +7,9 @@ from pyrocko import model
 from pyrocko import io
 from pyrocko.guts import Object, Dict, String, List, load as guts_load
 from pyrocko.gf.store import remake_dir, CannotCreate
-#from abedeto.util import create_directory
+from abedeto.map import MapParameters, make_map
 from abedeto.request import DataProvider, CakeTiming
+from pyrocko import orthodrome as ortho
 import logging
 from abedeto.array_map import ArrayMap
 import matplotlib.pyplot as plt
@@ -108,11 +109,6 @@ def beam(args):
 
         array_centers.append(bf.station_c)
 
-    # how to define map dimensions?
-    #map = ArrayMap(stations=array_centers,
-    #               station_label_mapping=provider.use,
-    #               event=event)
-    #map.save(args.map_filename)
 
 def propose_stores(args):
     from abedeto.get_bounds import get_bounds
@@ -188,6 +184,24 @@ def process(args):
             settings.dump(filename=settings_fn)
     if args.show:
         plt.show()
+
+def mapify(args):
+    provider = DataProvider.load(filename='request.yaml')
+    stations = []
+    for array_id in provider.use:
+        subdir = pjoin(array_data, array_id)
+        stations.append(one_or_error(model.load_stations(pjoin(subdir, 'array_center.pf'))))
+    event = one_or_error(list(model.Event.load_catalog(event_fn)))
+    dists = map(lambda x: ortho.distance_accurate50m(event, x), stations)
+    print max(dists)
+    params = MapParameters(stations=stations,
+                           events=[event],
+                           lon=event.lon,
+                           lat=event.lat,
+                           radius=max(dists)*0.945,
+                           show_topo=args.show_topo,
+                           show_grid=False)
+    make_map(map_parameters=params)
 
 def get_bounds(args):
     from abedeto.get_bounds import get_bounds
@@ -360,6 +374,11 @@ if __name__=='__main__':
                         help='overwrite former settings files', default=False,
                         action='store_true', required=False)
 
+    map_parser = sp.add_parser('map', help='Create map')
+    map_parser.add_argument('--topography', dest='show_topo',
+                        help='overlay topography', default=False,
+                        action='store_true', required=False)
+
     bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
                                   'Helpful when generating stores for entire catalogs.')#, parents=[parser])
     bounds_parser.add_argument('--events',
@@ -391,6 +410,9 @@ if __name__=='__main__':
 
         if args.cmd == 'bounds':
             get_bounds(args)
+
+        if args.cmd == 'map':
+            mapify(args)
     except CannotCreate as e:
         logger.error('%s. Run with --force to overwrite existing data.' % e)
 
