@@ -86,13 +86,22 @@ Filters are adjustable: e.g. ``--filter=1.1:9`` will apply a band-pass filter wi
 Currently, no restitution is performed. However, the quantity can be changed using ``--quantity [displacement|velocity]`` which either integrates the beam or differentiates the synthetic traces, respectively. It is possible to retrieve response functions for each trace using ``--get-repsponses``. These can be found afterwards in the underlying data directory and can be used to restitute, manually.
 
 Some rudimentary information can be added as a caption to the figure by settings the ``--auto-caption`` flag.
-### General Information
+
 Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
 
     abedeto init catalog.pf --name
 
 In order to avoid amiguity between projects this works only when one event is present in the given file.
 By default, existing directories will not be overwritten unless appending ``--force`` to the command.
+
+For quicker feedback ``--show`` will visualize all results right away.
+
+Finally, the complete line to produce a meaningfull image might look like:
+
+    abedeto process --array-id AliceSprings --depth 0.2 --depths=0.2:12:0.2 --quantity displacement --filter 0.9:9 --gain 3. --out-filename="%(array-id)s_%(quantity)s" --correction=0.4 --zoom=-2:12 --title="%(array-id)s" --show --auto-caption
+
+
+### General Information
 
 The hierarchy within the directory looks as follows::
 
