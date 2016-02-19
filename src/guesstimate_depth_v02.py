@@ -46,12 +46,12 @@ class PlotSettings(Object):
                     'phase onset [s].', default=[-7, 15])
     correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
-    save_as = String.T(default='depth_%(array_id)s.png', help='filename')
+    save_as = String.T(default='depth_%(array-id)s.png', help='filename of output figure')
     force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
                         'applies only laterally!', default=False)
-    auto_caption = Bool.T(help='Add a caption giving basic information.',
+    auto_caption = Bool.T(help='Add a caption giving basic information to the figure.',
                           default=False)
-    title = String.T(default='%(array_id)s - %(event_name)s', help='Add default title.')
+    title = String.T(default='%(array-id)s - %(event_name)s', help='Add default title.')
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
     gain = Float.T(default=1., help='Gain factor')
@@ -332,7 +332,7 @@ def plot(settings, show=False):
         vline = ax.axvline(0., c='black')
         vline.set_linestyle('--')
     if settings.title:
-        params = {'array_id': '.'.join(station.nsl()),
+        params = {'array-id': ''.join(station.nsl()),
                   'event_name': event.name,
                   'event_time': time_to_str(event.time)}
         ax.text(0.5, 1.05, settings.title % params,
@@ -343,11 +343,17 @@ def plot(settings, show=False):
         cax.axis('off')
         cax.xaxis.set_visible(False)
         cax.yaxis.set_visible(False)
+        if settings.quantity == 'displacement':
+            quantity_info = 'integrated velocity trace. '
+        if settings.quantity == 'velocity':
+            quantity_info = 'differentiated synthetic traces. '
+
         captions = {'filters':''}
         for f in settings.filters:
-            captions['filters'] += '%s pass, order %s, f$_c$=%s Hz, '%(f.type, f.order, f.corner)
+            captions['filters'] += '%s-pass, order %s, f$_c$=%s Hz. '%(f.type, f.order, f.corner)
+        captions['quantity_info'] = quantity_info
         captions['store_sampling'] = 1./store.config.deltat
-        cax.text(0, 0, 'Filters: %(filters)s GFDB sampled at %(store_sampling)s Hz.' % captions,
+        cax.text(0, 0, 'Filters: %(filters)s f$_{GF}$=%(store_sampling)s Hz.\n%(quantity_info)s' % captions,
                  fontsize=12, transform=cax.transAxes)
         plt.subplots_adjust(hspace=.4, bottom=0.15)
     else:
@@ -357,7 +363,7 @@ def plot(settings, show=False):
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
         options = settings.__dict__
-        options.update({'array_id': '.'.join(station.nsl())})
+        options.update({'array-id': ''.join(station.nsl())})
         fig.savefig(settings.save_as % options, dpi=160, bbox_inches='tight')
     if show:
         plt.show()
