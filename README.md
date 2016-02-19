@@ -3,12 +3,13 @@
 ### Prerequisites:
 
 * [pyrocko](http://emolch.github.io/pyrocko/)
+* [progressbar](https://pypi.python.org/pypi/progressbar) (optional)
 
 If you don't have appropriate Green's function databases you also need to install the
 modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html) in the
 "Creating a new Green's function store" paragraph.
 
-### Installation
+### Download and Installation
 
     git clone https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool.git
     cd ArrayBeamDepthTool
@@ -34,7 +35,7 @@ to start querying IRIS, Geofon and BGR data centers for available array data.
 
     abedeto beam
 
-*abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
+Also, *abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
     abedeto stores
 
@@ -64,9 +65,21 @@ Having finished this, run
     abedeto process [options]
 
 to generate figures which might help to judge about the depth of the event. They are created within the project directory in PNG format.
-Probably, synthetic and recorded traces are not well aligned. This can be corrected by appending a ``--correction [some_seconds]`` to the last command.
+
+### Further Information on Applications
+You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
+
+Given that you have a GF store stored in a different location other then in the *stores* sub-directory of your project, you can specify that location: ``--store-superdirs=[comma separated list of directories]. Futhermore, if the store is not given the default name which is ``"ArrayID-xx-yy" (xx and yy are Crust2.0 tile IDs) the specific store to use can be defined: ``--store=STORE_ID``.
+
+Synthetic and recorded traces might not be well aligned. This can be corrected by appending a ``--correction=[some\_seconds]`` to the last command. Notice that the dashed line indicating the synthetic onset might also be shifted with respect to the synthetic traces. The reason for this is that the onset calculation is only performed usin the source site model.
+
+All traces are normalized using their minmum/maximum amplitude within the visible time-range. Additionally, a gain factor can be applied using ``--gain=[X]`` (X is a float).
+
+Filters are adjustable: e.g. ``--filter=1.1:9`` will apply a band-pass filter with corner frequencies between 1.1 and 9.0 Hz.
+
 Currently, no restitution is performed. However, the quantity can be changed using ``--quantity [displacement|velocity]`` which either integrates the beam or differentiates the synthetic traces, respectively. It is possible to retrieve response functions for each trace using ``--get-repsponses``. These can be found afterwards in the underlying data directory and can be used to restitute, manually.
 
+Some rudimentary information can be added as a caption to the figure by settings the ``--auto-caption`` flag.
 ### General Information
 Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
 
