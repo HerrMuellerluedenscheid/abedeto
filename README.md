@@ -69,9 +69,15 @@ to generate figures which might help to judge about the depth of the event. They
 ### Further Information on Applications
 You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
 
-Given that you have a GF store stored in a different location other then in the *stores* sub-directory of your project, you can specify that location: ``--store-superdirs=[comma separated list of directories]. Futhermore, if the store is not given the default name which is ``"ArrayID-xx-yy" (xx and yy are Crust2.0 tile IDs) the specific store to use can be defined: ``--store=STORE_ID``.
+Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6. This will plot the beam at the y-axis intersept coinciding with a depth of 1.6 km.
 
-Synthetic and recorded traces might not be well aligned. This can be corrected by appending a ``--correction=[some\_seconds]`` to the last command. Notice that the dashed line indicating the synthetic onset might also be shifted with respect to the synthetic traces. The reason for this is that the onset calculation is only performed usin the source site model.
+The number of synthetic traces to display can be modified using the ``--depths`` option. E.g. ``--depths=0.2:12:0.2`` will draw synthetic traces of sources between 0.2 and 12 km depths with an increment 0.2 km.
+
+Given that you have a GF store stored in a different location other then in the *stores* sub-directory of your project, you can specify that location: ``--store-superdirs=[comma separated list of directories]``. Futhermore, if the store is not given the default name which is "ArrayID-xx-yy" (xx and yy are Crust2.0 tile IDs) the specific store to use can be defined: ``--store=STORE_ID``.
+
+Synthetic and recorded traces might not be well aligned. This can be corrected by appending a ``--correction=[some_seconds]`` to the last command. Notice that the dashed line indicating the synthetic onset might also be shifted with respect to the synthetic traces. The reason for this is that the onset calculation is (at the moment) only performed using the source site model.
+
+In order to change the visible time range, define a time window with respect to the synthetic onset. E.g: ``--zoom=-2.0:12`` will plot traces within a time window of 14 seconds length, starting 2 seconds before the synthetic P phase arrival.
 
 All traces are normalized using their minmum/maximum amplitude within the visible time-range. Additionally, a gain factor can be applied using ``--gain=[X]`` (X is a float).
 
