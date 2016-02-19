@@ -291,7 +291,7 @@ if __name__=='__main__':
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
     process_parser = sp.add_parser('process', help='Create images')
-    process_parser.add_argument('--array-id',
+    process_parser.add_argument('--array_id', dest='array_id',
                                 help='array-id to process',
                                 required=False,
                                 default=False)
@@ -302,9 +302,6 @@ if __name__=='__main__':
     process_parser.add_argument('--cc_align',
                         help='dummy argument at the moment',
                         required=False)
-    #process_parser.add_argument('--event',
-    #                    help='name of file containing event catalog',
-    #                    required=True)
     process_parser.add_argument('--store-superdirs',
             help='super directory where to look for stores',
             dest='store_superdirs', nargs='*', default=['stores'], required=False)
@@ -371,7 +368,7 @@ if __name__=='__main__':
                         help='creates a text field giving the used parameters',
                         required=False)
     process_parser.add_argument('--title', dest='title',
-                        help='template for title. default: %(array_id)s - %(event_name)s',
+                        help='template for title.',
                         required=False)
     process_parser.add_argument('--overwrite-settings', dest='overwrite_settings',
                         help='overwrite former settings files', default=False,
