@@ -163,7 +163,7 @@ def process(args):
     for array_id in array_ids:
         subdir = pjoin(array_data, array_id)
         settings_fn = pjoin(subdir, 'plot_settings.yaml')
-        if os.path.isfile(settings_fn):
+        if os.path.isfile(settings_fn) and args.overwrite_settings:
             settings = PlotSettings.load(filename=pjoin(settings_fn))
             settings.update_from_args(args)
         else:
@@ -227,7 +227,7 @@ if __name__=='__main__':
                             help='download available data right away.')
     init_parser.add_argument('--force',
                             action='store_true',
-                            default=False,
+                            default=True,
                             help='force overwrite')
     init_parser.add_argument('--format',
                             default='catalog',
@@ -365,10 +365,13 @@ if __name__=='__main__':
                         required=False)
     process_parser.add_argument('--out-filename',
                         help='file to store image',
-                        dest='outfn',
+                        dest='save_as',
                         required=False)
     process_parser.add_argument('--print-parameters', dest='print_parameters',
                         help='creates a text field giving the used parameters',
+                        required=False)
+    process_parser.add_argument('--title', dest='title',
+                        help='template for title. default: %(array_id)s - %(event_name)s',
                         required=False)
     process_parser.add_argument('--overwrite-settings', dest='overwrite_settings',
                         help='overwrite former settings files', default=False,
