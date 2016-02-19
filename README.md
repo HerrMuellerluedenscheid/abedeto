@@ -98,8 +98,7 @@ For quicker feedback ``--show`` will visualize all results right away.
 
 Finally, the complete line to produce a meaningfull image might look like:
 
-    abedeto process --array-id AliceSprings --depth 0.2 --depths=0.2:12:0.2 --quantity displacement --filter 0.9:9 --gain 3. --out-filename="%(array-id)s_%(quantity)s" --correction=0.4 --zoom=-2:12 --title="%(array-id)s" --show --auto-caption
-
+    abedeto process --array-id AliceSprings --depth 0.2 --depths=0.2:12:0.2 --quantity displacement --filter 0.9:9 --gain 3. --out-filename="%(array-id)s_%(quantity)s" --correction=0.4 --zoom=-2:12 --title="%(array-id)s" --show --auto-caption 
 
 ### General Information
 
