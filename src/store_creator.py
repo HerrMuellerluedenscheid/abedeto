@@ -126,7 +126,6 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
             slow = arrivals[0].p/(cake.r2d*cake.d2m/km)
             slowness_taper = (0.3*slow, 0.5*slow, 1.5*slow, 1.7*slow)
             z_turn = num.max(arrivals[0].zxt_path_subdivided()[0])
-        config.sw_algorithm = 1
 
         config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=z_turn*1.1)
         begin_phase_defs = 'P,P\\,PP'
@@ -157,6 +156,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         qs.sw_flat_earth_transform = 1
         qs.filter_shallow_paths = 1
         qs.filter_shallow_paths_depth = float(z_turn * 0.2)
+        qs.sw_algorithm = 1
         qs.validate()
         config.validate()
         Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
