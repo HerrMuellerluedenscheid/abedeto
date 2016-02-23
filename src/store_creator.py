@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as num
 import math
+import bisect
 from pyrocko import crust2x2, orthodrome as ortho
 from pyrocko.fomosto import qseis
 from pyrocko.gf.store import Store, remake_dir
@@ -26,6 +27,23 @@ class NoRay(Exception):
 def model_has_cmb(mod):
     disks = mod.discontinuities()
     return 'cmb' in [d.name for d in disks]
+
+
+def adjust_earthmodel_receiver_depth(config):
+    rmod = config.earthmodel_receiver_1d
+    smod = config.earthmodel_1d
+    last_layer = list(rmod.elements())[-1]
+    ll_zbot = last_layer.zbot
+    s_z = smod.profile('z')
+    if ll_zbot in s_z:
+        return
+    else:
+        last_layer.zbot = s_z[bisect.bisect(s_z, ll_zbot)]
+    #for l in smod.layers():
+    #    if l.zbot > ll_zbot:
+    #        ltop, lbot = l.split(ll_zbot)
+
+
 
 def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
                   source_depth_delta=1., sample_rate=10., force=False, numdists=2,
@@ -87,6 +105,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         if simplify:
             mod = mod.simplify(max_rel_error=0.002)
         setattr(config, 'earthmodel_1d', mod)
+        adjust_earthmodel_receiver_depth(config)
         configs.append(config)
         config.id = configid
         dest_dir = pjoin(superdir, config.id)
