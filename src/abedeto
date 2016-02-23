@@ -193,12 +193,11 @@ def mapify(args):
         stations.append(one_or_error(model.load_stations(pjoin(subdir, 'array_center.pf'))))
     event = one_or_error(list(model.Event.load_catalog(event_fn)))
     dists = map(lambda x: ortho.distance_accurate50m(event, x), stations)
-    print max(dists)
     params = MapParameters(stations=stations,
                            events=[event],
                            lon=event.lon,
                            lat=event.lat,
-                           radius=max(dists)*0.945,
+                           radius=max(dists)*0.9,
                            show_topo=args.show_topo,
                            show_grid=False)
     make_map(map_parameters=params)
@@ -291,7 +290,7 @@ if __name__=='__main__':
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
     process_parser = sp.add_parser('process', help='Create images')
-    process_parser.add_argument('--array_id', dest='array_id',
+    process_parser.add_argument('--array-id', dest='array_id',
                                 help='array-id to process',
                                 required=False,
                                 default=False)
