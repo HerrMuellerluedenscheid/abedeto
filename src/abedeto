@@ -5,6 +5,7 @@ from abedeto.beam_stack import BeamForming
 import abedeto.store_creator as store_creator
 from pyrocko import model
 from pyrocko import io
+from pyrocko import trace
 from pyrocko.guts import Object, Dict, String, List, load as guts_load
 from pyrocko.gf.store import remake_dir, CannotCreate
 from abedeto.map import MapParameters, make_map
@@ -13,13 +14,14 @@ from pyrocko import orthodrome as ortho
 import logging
 from abedeto.array_map import ArrayMap
 import matplotlib.pyplot as plt
-
-
+from pyrocko.fdsn import station as wsstation, resp
+import glob
 pjoin = os.path.join
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('run')
 
+output_units = 'M'
 stores_superdir = 'stores'
 array_data = 'array_data'
 event_fn = 'event.pf'
@@ -36,6 +38,30 @@ def one_or_error(items):
         raise Exception('more than one item in list. Can only handle one')
     else:
         return e[0]
+
+
+def dictify_resps(respfiles):
+    out = {}
+    for r in respfiles:
+        resp = wsstation.Response.load(filename=r)
+        r = r.split('/')[-1]
+        r = r.replace("resp_", '')
+        r = r.replace(".yaml", '')
+        out[tuple(r.split('.'))] = resp
+    return out
+
+
+def restitute(traces, respfiles, freqlimits, tfade):
+    '''TODO dump and read as List '''
+    restituted = []
+    responses = dictify_resps(respfiles)
+    for tr in traces:
+        response = responses[tr.nslc_id]
+        tr = tr.transfer(tfade, freqlimits, transfer_function=response, invert=True)
+        restituted.append(tr)
+
+    return restituted
+
 
 def one_2_list(items):
     if not isinstance(items, list):
@@ -76,15 +102,20 @@ def download(args, event=None, prefix=''):
         event = model.Event.load_catalog(event_fn)
         event = one_or_error(event)
     provider = DataProvider()
+    extra_kw = {'get_responses': args.get_responses,
+                'want': args.want,
+                'force': args.force,
+                'event': event}
+    get_responses = args.get_responses
     try:
         settings = args.download_settings
-        provider.download(event, settings=settings, force=args.force)
+        provider.download(settings=settings, **extra_kw)
     except (AttributeError, TypeError):
         e = event
         provider = DataProvider()
         tmin = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-80', fallback_time=100.)
         tmax = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+120', fallback_time=600.)
-        provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True, force=args.force)
+        provider.download(timing=(tmin, tmax), prefix=prefix, dump_config=True, **extra_kw)
 
 
 def beam(args):
@@ -98,6 +129,11 @@ def beam(args):
         directory = pjoin(array_data, array_id)
         traces = io.load(pjoin(directory, 'traces.mseed'))
         stations = model.load_stations(pjoin(directory, 'stations.pf'))
+        if args.restitute:
+            resp_files = glob.glob(pjoin(directory, 'responses/*'))
+            ftap = map(float, args.freqlimits.split(':'))
+            traces = restitute(traces, resp_files, ftap, args.fade)
+
         bf = BeamForming(stations, traces, normalize=args.normalize)
         bf.process(event=event,
                    timing=provider.timings[array_id].timings[0],
@@ -234,10 +270,10 @@ if __name__=='__main__':
                             help='[yaml|catalog], default catalog')
 
     download_parser = sp.add_parser('download', help='Download data')
-    download_parser.add_argument('--download',
-                                help='download available data',
-                                default=False,
-                                action='store_true')
+    download_parser.add_argument('--array-id',
+                                help='only download for this array',
+                                 dest='want',
+                                default='all')
     download_parser.add_argument('--settings',
                                 help='Load download settings.',
                                 dest='download_settings',
@@ -245,6 +281,7 @@ if __name__=='__main__':
     download_parser.add_argument('--get-responses',
                             action='store_true',
                             default=False,
+                            dest='get_responses',
                             help='get station meta infos')
     download_parser.add_argument('--force',
                             action='store_true',
@@ -258,6 +295,20 @@ if __name__=='__main__':
                             help='normlize by standard deviation of trace',
                             action='store_true',
                             default=True)
+    beam_parser.add_argument('--restitute',
+                            help='requires --get-responses when downloading. '
+                             'Using freqlimits defined with --freqlimits',
+                            action='store_true',
+                            default=False)
+    beam_parser.add_argument('--fade',
+                            help='time domain fader applied before restitution'
+                             'default=10 seconds',
+                             type=float,
+                            default=10.)
+    beam_parser.add_argument('--freqlimits',
+                            help='Frequency domain tapers for restitution.'
+                             'default=0.2:0.8:20:40',
+                            default='0.2:0.8:20:40')
     beam_parser.add_argument('--plot',
                             help='create plots showing stations and store them '
                             'in sub-directories',
