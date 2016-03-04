@@ -264,7 +264,6 @@ class BeamForming(Object):
         ax = fig.add_axes([0.10, 0.1, 0.70, 0.7])
         ax.set_aspect('equal')
         cmap = cm.get_cmap('bwr')
-        print sizes
         ax.scatter(x, y, c=sizes, s=200, cmap=cmap,
                    vmax=num.max(sizes), vmin=-num.max(sizes))
         for i, lab in enumerate(stat_labels):
