@@ -53,7 +53,7 @@ class BeamForming(Object):
         self.station_c = None
         self.diff_dt_treat = diff_dt_treat
 
-    def process(self, event, timing, bazi=None, slow=None,  *args, **kwargs):
+    def process(self, event, timing, bazi=None, slow=None,  restitute=False, *args, **kwargs):
         '''
         :param timing: CakeTiming. Uses the definition without the offset.
         :param fn_dump_center: filename to where center stations shall be dumped
@@ -65,6 +65,7 @@ class BeamForming(Object):
         '''
         logger.debug('start beam forming')
         stations = self.stations
+        network_code = kwargs.get('responses', None)
         network_code = kwargs.get('network', '')
         station_code = kwargs.get('station', 'STK')
         c_station_id = (network_code, station_code)
@@ -98,7 +99,7 @@ class BeamForming(Object):
         else:
             self.bazi = bazi
             self.slow = slow
-        
+
         logger.info('stacking %s with slowness %1.4f s/km at back azimut %1.1f '
                     'degrees' %('.'.join(c_station_id), self.slow*cake.km, self.bazi))
 

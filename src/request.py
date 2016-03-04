@@ -131,9 +131,9 @@ class DataProvider(Object):
                        'Pilbara': ('AU', 'PSA*', '', channels),
                        'AliceSprings': ('AU', 'AS*', '', channels),
                        'GERES': [('IM', 'GEA?', '', channels),
-                                 ('IM', 'GEB?', '', channels),
-                                 ('IM', 'GEC?', '', channels),
-                                 ('IM', 'GED?', '', channels)],
+                                ('IM', 'GEB?', '', channels),
+                                ('IM', 'GEC?', '', channels),
+                                ('IM', 'GED?', '', channels)],
                        # Diego Garcia Hydroacoustic array noqa
                        'DGHAland': ('IM', 'I52H?', '', channels),
                        'DGHAS': ('IM', 'H08S?', '', channels),
@@ -190,6 +190,10 @@ class DataProvider(Object):
                     c + tuple((event.time, event.time+1000.)) for c in codes]
                 logger.debug('selection: %s' % selection)
                 try:
+                #    if site=='bgr':
+                #        st = ws.station(url='http://eida.bgr.de/', selection=selection)
+                #    else:
+                #        st = ws.station(site=site, selection=selection)
                     st = ws.station(site=site, selection=selection)
                 except ws.EmptyResult as e:
                     logging.error('%s on %s. skip' % (e, array_id))
@@ -246,10 +250,10 @@ class DataProvider(Object):
                                 pzresponse = None
                                 pass
                             pzresponses[tr.nslc_id] = pzresponse
-                            pzresponses[tr.nslc_id].dump_xml(filename=pjoin(
+                            pzresponses[tr.nslc_id].dump(filename=pjoin(
                                 sub_directory,
                                 'responses',
-                                'resp_%s.stationxml' % '.'.join(tr.nslc_id)))
+                                'resp_%s.yaml' % '.'.join(tr.nslc_id)))
                             if progressbar:
                                 pb.update(i_tr)
                         if progressbar:
