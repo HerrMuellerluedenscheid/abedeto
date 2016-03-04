@@ -68,6 +68,7 @@ Having finished this, run
     abedeto process [options]
 
 to generate figures which might help to judge about the depth of the event. They are created within the project directory in PNG format.
+Given that you restituted the traces when creating the beams, you have to define ``--quantity=restituted``. This is not done automatically, yet.
 
 ### Further Information on Applications
 You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
