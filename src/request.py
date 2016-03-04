@@ -194,6 +194,10 @@ class DataProvider(Object):
                 except ws.EmptyResult as e:
                     logging.error('%s on %s. skip' % (e, array_id))
                     continue
+                except ValueError as e:
+                    logger.error(e)
+                    logger.error('...skipping...')
+                    continue
 
                 stations = st.get_pyrocko_stations()
                 min_dist = min(
@@ -214,6 +218,7 @@ class DataProvider(Object):
                 try:
                     d = ws.dataselect(site=site, selection=selection)
                     store.remake_dir(sub_directory, force)
+                    store.remake_dir(pjoin(sub_directory, 'responses'), force)
                     fn = pjoin(sub_directory, 'traces.mseed')
                     with open(fn, 'w') as f:
                         f.write(d.read())
@@ -242,7 +247,9 @@ class DataProvider(Object):
                                 pass
                             pzresponses[tr.nslc_id] = pzresponse
                             pzresponses[tr.nslc_id].dump_xml(filename=pjoin(
-                                sub_directory, 'response-%s.stationxml' % site))
+                                sub_directory,
+                                'responses',
+                                'resp_%s.stationxml' % '.'.join(tr.nslc_id)))
                             if progressbar:
                                 pb.update(i_tr)
                         if progressbar:
