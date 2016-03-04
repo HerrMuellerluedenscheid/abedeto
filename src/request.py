@@ -130,10 +130,10 @@ class DataProvider(Object):
                        'TXAR': ('IM', 'TX*', '', channels),
                        'Pilbara': ('AU', 'PSA*', '', channels),
                        'AliceSprings': ('AU', 'AS*', '', channels),
-                       'GERES': [('IM', 'GEA?', '', channels),
-                                ('IM', 'GEB?', '', channels),
-                                ('IM', 'GEC?', '', channels),
-                                ('IM', 'GED?', '', channels)],
+                       #'GERES': [('IM', 'GEA?', '', channels),
+                       #         ('IM', 'GEB?', '', channels),
+                       #         ('IM', 'GEC?', '', channels),
+                       #         ('IM', 'GED?', '', channels)],
                        # Diego Garcia Hydroacoustic array noqa
                        'DGHAland': ('IM', 'I52H?', '', channels),
                        'DGHAS': ('IM', 'H08S?', '', channels),
@@ -168,18 +168,19 @@ class DataProvider(Object):
         """:param want: either 'all' or ID as string or list of IDs as strings
         """
         use = []
-        ts = {}
+        #ts = {}
         unit = 'M'
         if all([timing, length]) is None:
             raise Exception('Define one of "timing" and "length"')
         prefix = prefix or ''
         directory = pjoin(prefix, directory)
-        store.remake_dir(directory, force)
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
         pzresponses = {}
         for site, array_data_provder in self.providers.items():
             logger.info('requesting data from site %s' % site)
             for array_id, codes in array_data_provder.items():
-                if array_id not in want and want != 'all':
+                if array_id not in want and want != ['all']:
                     continue
                 sub_directory = pjoin(directory, array_id)
                 logger.info("fetching %s" % array_id)
@@ -261,19 +262,20 @@ class DataProvider(Object):
                     model.dump_stations(
                         stations, pjoin(sub_directory, 'stations.pf'))
 
-                    if dump_config and timing:
+                    if timing:
                         t = Timings(list(timing))
-                        ts[array_id] = t
-                        t.validate()
-                    if array_id not in use:
+                        self.timings[array_id] = t
+                    if array_id not in use and array_id not in self.use:
                         use.append(array_id)
                 except ws.EmptyResult as e:
                     logging.error('%s on %s' % (e, array_id))
 
-        if dump_config:
-            self.timings = ts
-            self.use = use
-            self.dump(filename=pjoin(prefix, 'request.yaml'))
+        self.use.extend(use)
+        #self.timings.update(ts)
+
+        #if dump_config:
+        #    self.timings = ts
+        #    self.dump(filename=pjoin(prefix, 'request.yaml'))
 
 
 if __name__ == "__main__":
