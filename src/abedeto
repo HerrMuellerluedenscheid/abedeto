@@ -103,7 +103,7 @@ def download(args, event=None, prefix=''):
         event = one_or_error(event)
     provider = DataProvider()
     extra_kw = {'get_responses': args.get_responses,
-                'want': args.want,
+                'want': args.want.split(','),
                 'force': args.force,
                 'event': event}
     get_responses = args.get_responses
@@ -272,7 +272,7 @@ if __name__=='__main__':
     download_parser = sp.add_parser('download', help='Download data')
     download_parser.add_argument('--array-id',
                                 help='only download for this array',
-                                 dest='want',
+                                dest='want',
                                 default='all')
     download_parser.add_argument('--settings',
                                 help='Load download settings.',
