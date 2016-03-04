@@ -13,11 +13,14 @@ from pyrocko import io
 from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
-from pyrocko.gf import DCSource, Target, LocalEngine, seismosizer, meta
+from pyrocko.gf import DCSource, MTSource, Target, LocalEngine, seismosizer, meta
 from pyrocko.util import str_to_time, time_to_str, match_nslc
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
+from pyrocko.io_common import FileLoadError
+
+
 km = 1000.
 logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
@@ -140,6 +143,8 @@ def notch_filter(tr, f_center, bandwidth):
     return tr
 
 def station_to_target(s, quantity, store_id):
+    if quantity=='restituted':
+        quantity = 'displacement'
     return Target(codes=s.nsl()+tuple('Z'),
                  lat=s.lat,
                  lon=s.lon,
@@ -151,7 +156,7 @@ def station_to_target(s, quantity, store_id):
 def plot(settings, show=False):
 
     #align_phase = 'P(cmb)P<(icb)(cmb)p'
-    with_onset_line = True
+    with_onset_line = False
     fill = True
     align_phase = 'P'
     zoom_window = settings.zoom
@@ -161,20 +166,23 @@ def plot(settings, show=False):
     zstart, zstop, inkr = settings.depths.split(':')
     test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
 
-    traces = io.load(settings.trace_filename)
+    try:
+        traces = io.load(settings.trace_filename)
+    except FileLoadError as e:
+        logger.info(e)
+        return 
 
     event = model.load_events(settings.event_filename)
     assert len(event)==1
     event = event[0]
     event.depth = float(settings.depth) * 1000.
-    base_source = DCSource.from_pyrocko_event(event)
+    base_source = MTSource.from_pyrocko_event(event)
 
     test_sources = []
     for d in test_depths:
         s = base_source.clone()
         s.depth = float(d)
         test_sources.append(s)
-
     if settings.store_superdirs:
         engine = LocalEngine(store_superdirs=settings.store_superdirs)
     else:
@@ -347,6 +355,8 @@ def plot(settings, show=False):
             quantity_info = 'integrated velocity trace. '
         if settings.quantity == 'velocity':
             quantity_info = 'differentiated synthetic traces. '
+        if settings.quantity == 'restituted':
+            quantity_info = 'restituted traces. '
 
         captions = {'filters':''}
         for f in settings.filters:
