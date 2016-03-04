@@ -26,6 +26,8 @@ stores_superdir = 'stores'
 array_data = 'array_data'
 event_fn = 'event.pf'
 km = 1000.
+fn_data_provider = 'request.yaml'
+
 
 class StoreMapper(Object):
     mapping = Dict.T(String.T(), List.T(String.T()))
@@ -56,6 +58,9 @@ def restitute(traces, respfiles, freqlimits, tfade):
     restituted = []
     responses = dictify_resps(respfiles)
     for tr in traces:
+        if tr.nslc_id not in responses:
+            logger.warn('No Response information for %s found. run "abedeto download --get-response"' % '.'.join(tr.nslc_id))
+            continue
         response = responses[tr.nslc_id]
         tr = tr.transfer(tfade, freqlimits, transfer_function=response, invert=True)
         restituted.append(tr)
@@ -101,29 +106,32 @@ def download(args, event=None, prefix=''):
     if not event:
         event = model.Event.load_catalog(event_fn)
         event = one_or_error(event)
-    provider = DataProvider()
     extra_kw = {'get_responses': args.get_responses,
                 'want': args.want.split(','),
                 'force': args.force,
                 'event': event}
     get_responses = args.get_responses
+    if os.path.isfile(fn_data_provider):
+        provider = DataProvider.load(filename=fn_data_provider)
+    else:
+        provider = DataProvider()
+
     try:
         settings = args.download_settings
         provider.download(settings=settings, **extra_kw)
     except (AttributeError, TypeError):
-        e = event
-        provider = DataProvider()
         tmin = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-80', fallback_time=100.)
         tmax = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+120', fallback_time=600.)
-        provider.download(timing=(tmin, tmax), prefix=prefix, dump_config=True, **extra_kw)
+        provider.download(timing=(tmin, tmax), prefix=prefix, **extra_kw)
 
+    provider.dump(filename=fn_data_provider)
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
     event = list(model.Event.load_catalog(event_fn))
     assert len(event)==1
     event = event[0]
-    provider = DataProvider.load(filename='request.yaml')
+    provider = DataProvider.load(filename=fn_data_provider)
     array_centers = []
     for array_id in provider.use:
         directory = pjoin(array_data, array_id)
@@ -133,7 +141,8 @@ def beam(args):
             resp_files = glob.glob(pjoin(directory, 'responses/*'))
             ftap = map(float, args.freqlimits.split(':'))
             traces = restitute(traces, resp_files, ftap, args.fade)
-
+            if len(traces)==0:
+                continue
         bf = BeamForming(stations, traces, normalize=args.normalize)
         bf.process(event=event,
                    timing=provider.timings[array_id].timings[0],
@@ -173,7 +182,7 @@ def propose_stores(args):
             station = one_or_error(station)
             configid = store_creator.propose_store(station, **store_kwargs)
     else:
-        provider = DataProvider.load(filename='request.yaml')
+        provider = DataProvider.load(filename=fn_data_provider)
         for array_id in provider.use:
             directory = pjoin(array_data, array_id)
             fn_array_center = pjoin(directory, 'array_center.pf')
@@ -189,7 +198,7 @@ def propose_stores(args):
 
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
-    provider = DataProvider.load(filename='request.yaml')
+    provider = DataProvider.load(filename=fn_data_provider)
     if args.array_id:
         array_ids = [args.array_id]
     else:
@@ -222,7 +231,7 @@ def process(args):
         plt.show()
 
 def mapify(args):
-    provider = DataProvider.load(filename='request.yaml')
+    provider = DataProvider.load(filename=fn_data_provider)
     stations = []
     for array_id in provider.use:
         subdir = pjoin(array_data, array_id)
@@ -370,7 +379,7 @@ if __name__=='__main__':
                         default='0:15:1', required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
-                        choices=['velocity', 'displacement'],
+                        choices=['velocity', 'displacement', 'restituted'],
                         required=False)
     process_parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
