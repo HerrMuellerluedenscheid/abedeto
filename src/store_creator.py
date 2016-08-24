@@ -67,7 +67,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         dists[prof._ident].append(ortho.distance_accurate50m(e, station))
         earthmodels_1d[prof._ident] = prof
 
-    _config = ConfigTypeA(id='[placeholder]',
+    _config = ConfigTypeA(id='placeholder',
                          source_depth_min=source_depth_min*km,
                          source_depth_max=source_depth_max*km,
                          source_depth_delta=source_depth_delta*km,
