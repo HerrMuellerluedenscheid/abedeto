@@ -17,6 +17,7 @@ pjoin = os.path.join
 logging.basicConfig(level="INFO")
 logger = logging.getLogger("propose-store")
 
+
 class NoRay(Exception):
     def __init__(self, context):
         Exception.__init__(self, 'NoRay at ' + context)
@@ -37,15 +38,12 @@ def adjust_earthmodel_receiver_depth(config):
         return
     else:
         last_layer.zbot = s_z[bisect.bisect(s_z, ll_zbot)]
-    #for l in smod.layers():
-    #    if l.zbot > ll_zbot:
-    #        ltop, lbot = l.split(ll_zbot)
 
 
-
-def propose_store(station, events, superdir, source_depth_min=0., source_depth_max=15.,
-                  source_depth_delta=1., sample_rate=10., force=False, numdists=2,
-                  run_ttt=False, simplify=False, phases=['P'], classic=True):
+def propose_store(station, events, superdir, source_depth_min=0.,
+                  source_depth_max=15., source_depth_delta=1., sample_rate=10.,
+                  force=False, numdists=2, run_ttt=False, simplify=False,
+                  phases=['P'], classic=True):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
     :param station: Station instance
@@ -88,7 +86,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
     wanted = [define_method(ph) for ph in phases]
 
     for ident, prof in earthmodels_1d.items():
-        logger.info('.'*70)
+        print('.'*70)
         configid = '%s_%s_%s' % (station.station, station_crust._ident, ident)
         config = copy.copy(_config)
 
@@ -108,7 +106,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         config.id = configid
         dest_dir = pjoin(superdir, config.id)
         remake_dir(dest_dir, force)
-        logger.info('Created store under: %s' % dest_dir)
+        logger.info('Created store: %s' % dest_dir)
 
         mean_z = num.mean((config.source_depth_min, config.source_depth_max))
         mean_dist = num.mean((config.distance_min, config.distance_max))
@@ -125,7 +123,10 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
             slowness_taper = (0.3*slow, 0.5*slow, 1.5*slow, 1.7*slow)
             z_turn = num.max(arrivals[0].zxt_path_subdivided()[0])
 
-        config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=z_turn*1.1)
+        zmax = max(
+            z_turn*1.1, config.earthmodel_receiver_1d.profile('z')[-1])
+
+        config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=zmax)
         begin_phase_defs = 'P,P\\,PP'
         if model_has_cmb(config.earthmodel_1d):
             begin_phase_defs += ',Pv_(cmb)p'
@@ -155,8 +156,6 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
         qs.filter_shallow_paths = 1
         qs.filter_shallow_paths_depth = float(z_turn * 0.2)
         qs.sw_algorithm = 1
-        qs.validate()
-        config.validate()
         Store.create_editables(dest_dir, config=config, extra={'qseis': qs})
         if run_ttt:
             st = Store(dest_dir)
@@ -168,7 +167,7 @@ def propose_store(station, events, superdir, source_depth_min=0., source_depth_m
 
 if __name__=="__main__":
     import argparse
-    from pyrocko.model import Station, Event, load_stations
+    from pyrocko.model import Event, load_stations
 
     parser = argparse.ArgumentParser('suggest a store for P phases only')
     parser.add_argument('--stations',
