@@ -1,5 +1,4 @@
 import os
-import sys
 import numpy as num
 import math
 import bisect
@@ -8,11 +7,10 @@ from pyrocko.fomosto import qseis
 from pyrocko.gf.store import Store, remake_dir
 from pyrocko.gf.meta import Timing, ConfigTypeA, TPDef
 from pyrocko import cake
-#from util import create_directory
 from collections import defaultdict
 import copy
-import tempfile
 import logging
+
 
 km = 1000.
 pjoin = os.path.join
