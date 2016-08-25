@@ -38,6 +38,13 @@ to start querying IRIS, Geofon and BGR data centers for available array data. Op
 This step is done based on synthetic back-azimuth and slownesses calculated using pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` subfolders showing the applied delay times.
 If, in the previous step, the response information have been donwloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the the transfer function before stacking traces.
 
+
+With
+
+    abedeto snuffle
+
+you can scrutinize waveforms, beams and make use of many other features provided by [snuffler](http://emolch.github.io/pyrocko/current/snuffler.html).
+
 Also, *abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
     abedeto stores
