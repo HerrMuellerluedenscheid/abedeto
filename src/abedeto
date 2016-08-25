@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 
 import os
 from abedeto.beam_stack import BeamForming
@@ -12,9 +12,8 @@ from abedeto.map import MapParameters, make_map
 from abedeto.request import DataProvider, CakeTiming
 from pyrocko import orthodrome as ortho
 import logging
-from abedeto.array_map import ArrayMap
 import matplotlib.pyplot as plt
-from pyrocko.fdsn import station as wsstation, resp
+from pyrocko.fdsn import station as wsstation
 import glob
 pjoin = os.path.join
 
@@ -31,8 +30,10 @@ fn_data_provider = 'request.yaml'
 
 class StoreMapper(Object):
     mapping = Dict.T(String.T(), List.T(String.T()))
+
     def __getitem__(self, key):
         return self.mapping[key]
+
 
 def one_or_error(items):
     e = list(items)
@@ -72,6 +73,7 @@ def one_2_list(items):
     if not isinstance(items, list):
         return [items]
 
+
 def init(args):
     if args.format=='catalog':
         events = list(model.Event.load_catalog(args.events))
@@ -102,6 +104,7 @@ def init(args):
         logger.info('.' * 30)
         logger.info('Prepared project directory %s for you' % name)
 
+
 def download(args, event=None, prefix=''):
     if not event:
         event = model.Event.load_catalog(event_fn)
@@ -125,6 +128,7 @@ def download(args, event=None, prefix=''):
         provider.download(timing=(tmin, tmax), prefix=prefix, **extra_kw)
 
     provider.dump(filename=fn_data_provider)
+
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
@@ -196,6 +200,7 @@ def propose_stores(args):
 
         store_mapper.dump(filename='store_mapping.yaml')
 
+
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
     provider = DataProvider.load(filename=fn_data_provider)
@@ -230,6 +235,7 @@ def process(args):
     if args.show:
         plt.show()
 
+
 def mapify(args):
     provider = DataProvider.load(filename=fn_data_provider)
     stations = []
@@ -247,6 +253,27 @@ def mapify(args):
                            show_grid=False)
     make_map(map_parameters=params)
 
+
+def snuffle(args):
+    """Uses tmin timing object, without the offset to calculate the beam"""
+    events = list(model.Event.load_catalog(event_fn))
+    provider = DataProvider.load(filename=fn_data_provider)
+    traces = []
+    stations = []
+    for array_id in provider.use:
+        directory = pjoin(array_data, array_id)
+        fn_beam=pjoin(directory, 'beam.mseed')
+
+        traces.extend(io.load(pjoin(directory, 'traces.mseed')))
+        traces.extend(io.load(fn_beam))
+
+        stations.extend(model.load_stations(pjoin(directory, 'stations.pf')))
+        stations.extend(
+            model.load_stations(pjoin(directory, 'array_center.pf')))
+
+    trace.snuffle(traces, stations=stations, events=events)
+
+
 def get_bounds(args):
     from abedeto.get_bounds import get_bounds
 
@@ -254,6 +281,7 @@ def get_bounds(args):
     directory = pjoin('array_data', args.array_id)
     stations = model.load_stations(pjoin(directory, 'array_center.pf'))
     get_bounds(stations, events=e, show_fig=True, km=True)
+
 
 if __name__=='__main__':
     import argparse
@@ -433,13 +461,15 @@ if __name__=='__main__':
                         help='overwrite former settings files', default=False,
                         action='store_true', required=False)
 
+    snuffle_parser = sp.add_parser('snuffle', help='Scrutinize waveforms')
+
     map_parser = sp.add_parser('map', help='Create map')
     map_parser.add_argument('--topography', dest='show_topo',
                         help='overlay topography', default=False,
                         action='store_true', required=False)
 
     bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
-                                  'Helpful when generating stores for entire catalogs.')#, parents=[parser])
+                                  'Helpful when generating stores for entire catalogs.')
     bounds_parser.add_argument('--events',
                         help='events filename',
                         required=True)
@@ -472,6 +502,8 @@ if __name__=='__main__':
 
         if args.cmd == 'map':
             mapify(args)
+
+        if args.cmd == 'snuffle':
+            snuffle(args)
     except CannotCreate as e:
         logger.error('%s. Run with --force to overwrite existing data.' % e)
-
