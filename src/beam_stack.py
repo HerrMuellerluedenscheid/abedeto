@@ -82,7 +82,6 @@ class BeamForming(Object):
         fn_dump_center = kwargs.get('fn_dump_center', 'array_center.pf')
         fn_beam = kwargs.get('fn_beam', 'beam.mseed')
         if event:
-            mod_str = kwargs.get('model', None)
             mod = cake.load_model(crust2_profile=(event.lat, event.lon))
             dist = ortho.distance_accurate50m(event, self.station_c)
             ray = timing.t(mod, (event.depth, dist), get_ray=True)
@@ -256,8 +255,6 @@ class BeamForming(Object):
 
         x_range = num.abs(xmax-xmin)
         y_range = num.abs(ymax-ymin)
-
-        max_range = num.max([x_range, y_range])
 
         fig = plt.figure()
         cax = fig.add_axes([0.85, 0.2, 0.05, 0.5])
