@@ -83,6 +83,11 @@ def init(args):
         if not isinstance(events, list):
             events = [events]
 
+    if len(events) == 0:
+        print("Could not find event in provided input: %s" % args.events)
+        import sys
+        sys.exit(0)
+
     if args.name and len(events)>1:
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
