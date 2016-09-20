@@ -140,3 +140,7 @@ The hierarchy within the directory looks as follows::
 #### Handling ``number of layers (lmax) defined too small``
 
 Especially at large distances, the ray's turning point can be deep resulting in an earthmodel (see store's config file) of great depth. In this case QSeis will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you QSeis' installation's ``qsglobal.h``, recompile and try again.
+
+### Citation of data
+I recommend to have a look at the [IRIS Citations](http://www.iris.edu/hq/iris_citations) 
+and [FDSN Citations](http://www.fdsn.org/citations/) section for acknowledgement.
