@@ -27,6 +27,8 @@ logger = logging.getLogger('guesstimate')
 arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
             'gain', 'gain_record', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom',
            'title', 'save_as', 'color', 'auto_caption', 'quantity', 'cc_align']
+
+
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',

@@ -113,22 +113,22 @@ class DataProvider(Object):
         self.use = use or []
         self.timings = timings or {}
         iris_arrays = {'YKA': ('CN', 'YKA*', '', channels),
-                       'ESK': [('IM', 'EKB?', '', channels),
-                               ('IM', 'EKR*', '', channels)],
-                       'ESK1': ('IM', 'EKA?', '', channels),
+                       #'ESK': [('IM', 'EKB?', '', channels),
+                       #        ('IM', 'EKR*', '', channels)],
+                       #'ESK1': ('IM', 'EKA?', '', channels),
                        'ILAR': ('IM', 'IL*', '', channels),
                        'IMAR': ('IM', 'IM0?', '', channels),
-                       'NIA': ('IM', 'I56H?', '', channels),
-                       'PFIA': [('IM', 'I57H?', '', channels),
-                                ('IM', 'I57L?', '', channels)],
+                       #'NIA': ('IM', 'I56H?', '', channels),
+                       #'PFIA': [('IM', 'I57H?', '', channels),
+                       #         ('IM', 'I57L?', '', channels)],
                        'BMA': ('IM', 'BM0?', '', channels),
                        'BCA': ('IM', 'BC0?', '', channels),
-                       'HIA': ('IM', 'I59H?', '', channels),
+                       #'HIA': ('IM', 'I59H?', '', channels),
                        'NVAR': ('IM', 'NV*', '', channels),
                        'PDAR': [('IM', 'PD0*', '', channels),
                                ('IM', 'PD1*', '', channels)],
                        'TXAR': ('IM', 'TX*', '', channels),
-                       'Pilbara': ('AU', 'PSA*', '', channels),
+                       #'Pilbara': ('AU', 'PSA*', '', channels),
                        'AliceSprings': ('AU', 'AS*', '', channels),
                        #'GERES': [('IM', 'GEA?', '', channels),
                        #         ('IM', 'GEB?', '', channels),
@@ -139,20 +139,22 @@ class DataProvider(Object):
                        'DGHAS': ('IM', 'H08S?', '', channels),
                        'DGHAN': ('IM', 'H08N?', '', channels),
                        # Tristan da Cunha. channels: BDF. noqa
-                       'TDC': [('IM', 'H09N?', '', channels),
-                               ('IM', 'I49H?', '', channels)],
-                       'NarroginIA': ('IM', 'I04H?', '', channels),
-                       'CocosIslands': ('IM', 'I06H?', '', channels),
+                       #'TDC': [('IM', 'H09N?', '', channels),
+                       #        ('IM', 'I49H?', '', channels)],
+                       #'NarroginIA': ('IM', 'I04H?', '', channels),
+                       #'CocosIslands': ('IM', 'I06H?', '', channels),
                        'Warramunga': ('IM', 'I07H?', '', channels),
-                       'BermudaIA': ('IM', 'I51H?', '', channels),
-                       'FairbanksIA': ('IM', 'I53H?', '', channels)}
+                       #'BermudaIA': ('IM', 'I51H?', '', channels),
+                       #'FairbanksIA': ('IM', 'I53H?', '', channels)
+                       }
 
         geofon_arrays = {'ROHRBACH': ('6A', 'V*', '', channels),
                          'AntaOffshore': ('GR', 'I27L?', '*', channels),
                          'AntaOnshore': ('AW', 'VNA*', '*', channels),
-                         'NORES': [('NO', 'NA*', '*', channels),
-                                   ('NO', 'NB*', '*', channels),
-                                   ('NO', 'NC*', '*', channels)]}
+                         #'NORES': [('NO', 'NA*', '*', channels),
+                                   #('NO', 'NB*', '*', channels),
+                                   #('NO', 'NC*', '*', channels)]}
+                         }
         bgr_arrays = {'GERES': [('GR', 'GEA?', '*', channels),
                                 ('GR', 'GEB?', '*', channels),
                                 ('GR', 'GEC?', '*', channels),
@@ -177,13 +179,15 @@ class DataProvider(Object):
         if not os.path.isdir(directory):
             os.mkdir(directory)
         pzresponses = {}
+        logger.info('download data: %s at %sN %sE' % (
+            event.name, event.lat, event.lon))
         for site, array_data_provder in self.providers.items():
             logger.info('requesting data from site %s' % site)
             for array_id, codes in array_data_provder.items():
                 if array_id not in want and want != ['all']:
                     continue
                 sub_directory = pjoin(directory, array_id)
-                logger.info("fetching %s" % array_id)
+                logger.info("%s" % array_id)
                 codes = array_data_provder[array_id]
                 if not isinstance(codes, list):
                     codes = [codes]
@@ -197,7 +201,7 @@ class DataProvider(Object):
                 #        st = ws.station(site=site, selection=selection)
                     st = ws.station(site=site, selection=selection)
                 except ws.EmptyResult as e:
-                    logging.error('%s on %s. skip' % (e, array_id))
+                    logging.error('No results: %s %s. skip' % (e, array_id))
                     continue
                 except ValueError as e:
                     logger.error(e)

@@ -128,8 +128,7 @@ class BeamForming(Object):
             if tr.nslc_id[:2] == c_station_id:
                 continue
             tr = tr.copy(data=True)
-            tr.ydata = tr.ydata.astype(num.float64)
-            tr.ydata -= tr.ydata.mean(dtype=num.float64)
+            tr.ydata = tr.ydata.astype(num.float64) - tr.ydata.mean(dtype=num.float64)
             tr.taper(taperer)
             try:
                 stack_trace = self.stacked[tr.channel]
@@ -252,9 +251,6 @@ class BeamForming(Object):
         xmin = x.min()
         ymax = y.max()
         ymin = y.min()
-
-        x_range = num.abs(xmax-xmin)
-        y_range = num.abs(ymax-ymin)
 
         fig = plt.figure()
         cax = fig.add_axes([0.85, 0.2, 0.05, 0.5])

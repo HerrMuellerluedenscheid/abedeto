@@ -40,13 +40,49 @@ def adjust_earthmodel_receiver_depth(config):
         last_layer.zbot = s_z[bisect.bisect(s_z, ll_zbot)]
 
 
-def propose_store(station, events, superdir, source_depth_min=0.,
-                  source_depth_max=15., source_depth_delta=1., sample_rate=10.,
-                  force=False, numdists=2, run_ttt=False, simplify=False,
-                  phases=['P'], classic=True):
+def setup_distances_crusts(stations, events, do_round=True):
     ''' Propose a fomosto store configuration for P-pP Array beam forming.
     :param event: Event instance
-    :param station: Station instance
+    :param station: Station instance.'''
+    distances = {}
+    models = {}
+    for s in stations:
+        for e in events:
+            event_profile = crust2x2.get_profile(e.lat, e.lon)
+            station_profile = crust2x2.get_profile(s.lat, s.lon)
+            k1 = station_profile._ident
+            k2 = event_profile._ident
+            models[k1] = station_profile
+            models[k2] = event_profile
+            key = (s.station, k1, k2)
+            distance = ortho.distance_accurate50m(e, s)
+            if not key in distances:
+                if do_round:
+                    distances[key] = (math.floor(distance-1),
+                                      math.ceil(distance+1))
+                else:
+                    distances[key] = (distance-1, distance+1)
+            else:
+                d1, d2 = distances[key]
+                if do_round:
+                    distances[key] = (min(d1, math.floor(distance-1)),
+                                      max(d2, math.ceil(distance+1)))
+                else:
+                    distances[key] = (min(d1, distance-1), max(d2, distance+1))
+
+    return distances, models
+
+
+#def propose_store(station, events, superdir, source_depth_min=0.,
+#                  source_depth_max=15., source_depth_delta=1., sample_rate=10.,
+#                  force=False, numdists=2, run_ttt=False, simplify=False,
+#                  phases=['P'], classic=True):
+def propose_stores(distances, models, superdir, source_depth_min=0.,
+                  source_depth_max=15., source_depth_delta=1., sample_rate=10.,
+                  force=False, numdists=2, run_ttt=False, simplify=False,
+                  phases=['P'], classic=True, distance_delta_max=None):
+    ''' Propose a fomosto store configuration for P-pP Array beam forming.
+    :param event: Event instance
     :param superdir: where to create the store (default, current directory)
     :param source_depth_min: minimum source depth (default 0)
     :param source_depth_max: maximum source deoth (default 15)
@@ -54,28 +90,8 @@ def propose_store(station, events, superdir, source_depth_min=0.,
     :param sample_rate: in Hz
     :param force_overwrite: overwrite potentially existent store
     :param run_ttt: generate travel time tables right away'''
+
     modelling_code_id = 'qseis.2006a'
-
-    earthmodels_1d = {}
-    dists = defaultdict(list)
-    for e in events:
-        prof = crust2x2.get_profile(e.lat, e.lon)
-        dists[prof._ident].append(ortho.distance_accurate50m(e, station))
-        earthmodels_1d[prof._ident] = prof
-
-    _config = ConfigTypeA(id='placeholder',
-                         source_depth_min=source_depth_min*km,
-                         source_depth_max=source_depth_max*km,
-                         source_depth_delta=source_depth_delta*km,
-                         distance_min=0,
-                         distance_max=0,
-                         distance_delta=0,
-                         sample_rate=sample_rate,
-                         ncomponents=10)
-
-    station_crust = crust2x2.get_profile(station.lat, station.lon)
-    mod = cake.LayeredModel.from_scanlines(cake.from_crust2x2_profile(station_crust))
-    setattr(_config, 'earthmodel_receiver_1d', mod)
 
     configs = []
     if classic:
@@ -85,25 +101,36 @@ def propose_store(station, events, superdir, source_depth_min=0.,
 
     wanted = [define_method(ph) for ph in phases]
 
-    for ident, prof in earthmodels_1d.items():
-        print('.'*70)
-        configid = '%s_%s_%s' % (station.station, station_crust._ident, ident)
-        config = copy.copy(_config)
+    global_model = cake.load_model()
+    remake_dir(superdir, force)
+    for (station_id, key_station, key_event), (dist_min, dist_max) in distances.items():
 
-        config.distance_min = math.floor(min(dists[ident]))
-        config.distance_max = math.ceil(max(dists[ident]))
-        if len(events)==1:
-            distance_delta = 1.
-        else:
-            distance_delta = (config.distance_max-config.distance_min)/(numdists-1)
-        config.distance_delta = distance_delta
-        mod = cake.load_model(crust2_profile=prof)
+        configid = '%s_%s_%s' % (station_id, key_station, key_event)
+        distance_delta = dist_max - dist_min
+        if distance_delta_max is not None:
+            while distance_delta > distance_delta_max:
+                distance_delta /= 2.
+        config = ConfigTypeA(id=configid,
+                             source_depth_min=source_depth_min*km,
+                             source_depth_max=source_depth_max*km,
+                             source_depth_delta=source_depth_delta*km,
+                             distance_min=dist_min,
+                             distance_max=dist_max,
+                             distance_delta=distance_delta,
+                             sample_rate=sample_rate,
+                             ncomponents=10)
+
+        station_crust = models[key_station]
+        config.earthmodel_receiver_1d = cake.LayeredModel.from_scanlines(
+            cake.from_crust2x2_profile(station_crust))
+
+        config.earthmodel_1d = global_model.replaced_crust(
+            crust2_profile=models[key_event])
+
         if simplify:
-            mod = mod.simplify(max_rel_error=0.002)
-        setattr(config, 'earthmodel_1d', mod)
+            config.earthmodel_1d = config.earthmodel_1d.simplify(max_rel_error=0.002)
         adjust_earthmodel_receiver_depth(config)
         configs.append(config)
-        config.id = configid
         dest_dir = pjoin(superdir, config.id)
         remake_dir(dest_dir, force)
         logger.info('Created store: %s' % dest_dir)
