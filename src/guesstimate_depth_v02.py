@@ -12,18 +12,23 @@ from pyrocko import io
 from pyrocko import model, cake
 from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
-from pyrocko.gf import DCSource, Target, LocalEngine, seismosizer, meta
+from pyrocko.gf import DCSource, MTSource, Target, LocalEngine, seismosizer, meta
 from pyrocko.util import str_to_time, time_to_str, match_nslc
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
 import matplotlib.pyplot as plt
+from pyrocko.io_common import FileLoadError
+
+
 km = 1000.
 logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
 arglist = ['station_filename', 'trace_filename', 'store_id', 'event_filename',
             'gain', 'gain_record', 'correction', 'store_superdirs', 'depth', 'depths', 'zoom',
-           'title', 'save_as', 'color', 'auto_caption', 'quantity']
+           'title', 'save_as', 'color', 'auto_caption', 'quantity', 'cc_align']
+
+
 class PlotSettings(Object):
     trace_filename = String.T(help='filename of beam or trace to use for '
                               'plotting, incl. path.',
@@ -46,12 +51,12 @@ class PlotSettings(Object):
                     'phase onset [s].', default=[-7, 15])
     correction = Float.T(help='time shift, to move beam trace.', default=0.)
     normalize = Bool.T(help='normalize by maximum amplitude', default=True)
-    save_as = String.T(default='depth_%(array_id)s.png', help='filename')
+    save_as = String.T(default='depth_%(array-id)s.png', help='filename of output figure')
     force_nearest_neighbor = Bool.T(help='Handles OutOfBounds exceptions. '
                         'applies only laterally!', default=False)
-    auto_caption = Bool.T(help='Add a caption giving basic information.',
+    auto_caption = Bool.T(help='Add a caption giving basic information to the figure.',
                           default=False)
-    title = String.T(default='%(array_id)s - %(event_name)s', help='Add default title.')
+    title = String.T(default='%(array-id)s - %(event_name)s', help='Add default title.')
     quantity = String.T(default='velocity', help='velocity-> differentiate synthetic.'
                         'displacement-> integrate recorded')
     gain = Float.T(default=1., help='Gain factor')
@@ -69,14 +74,7 @@ class PlotSettings(Object):
         except:
             pass
 
-        for arg in arglist:
-            try:
-                val = getattr(args, arg)
-                if val:
-                    kwargs.update({arg: val})
-            except AttributeError:
-                logger.debug('%s not defined' % arg)
-                continue
+        kwargs.update(self.process_arglist(args))
         for arg, v in kwargs.items():
             setattr(self, arg, v)
 
@@ -89,26 +87,32 @@ class PlotSettings(Object):
         filters = [
             ButterworthResponse(corner=float(lp), order=4, type='low'),
             ButterworthResponse(corner=float(hp), order=4, type='high')]
+        kwargs = cls.process_arglist(args)
+        return cls(filters=filters, **kwargs)
 
+    def do_filter(self, tr):
+        for f in self.filters:
+            tr = tr.transfer(transfer_function=f,
+                             tfade=10,
+                             cut_off_fading=False)
+        return tr
+
+    @staticmethod
+    def process_arglist(args):
         kwargs = {}
         for arg in arglist:
             try:
                 val = getattr(args, arg)
+                if arg=='zoom' and val:
+                    val = val.split(':')
+                    val = map(float, val)
                 if val:
                     kwargs.update({arg: val})
             except AttributeError:
                 logger.debug('%s not defined' % arg)
                 continue
 
-        return cls(filters=filters,
-                   **kwargs)
-
-    def do_filter(self, tr):
-        for f in self.filters:
-            tr = tr.transfer(transfer_function=f,
-                             tfade=20,
-                             cut_off_fading=False)
-        return tr
+        return kwargs
 
 class GaussNotch(FrequencyResponse):
     def __init__(self, center, fwhm):
@@ -141,6 +145,8 @@ def notch_filter(tr, f_center, bandwidth):
     return tr
 
 def station_to_target(s, quantity, store_id):
+    if quantity=='restituted':
+        quantity = 'displacement'
     return Target(codes=s.nsl()+tuple('Z'),
                  lat=s.lat,
                  lon=s.lon,
@@ -152,7 +158,7 @@ def station_to_target(s, quantity, store_id):
 def plot(settings, show=False):
 
     #align_phase = 'P(cmb)P<(icb)(cmb)p'
-    with_onset_line = True
+    with_onset_line = False
     fill = True
     align_phase = 'P'
     zoom_window = settings.zoom
@@ -162,20 +168,23 @@ def plot(settings, show=False):
     zstart, zstop, inkr = settings.depths.split(':')
     test_depths = num.arange(float(zstart)*km, float(zstop)*km, float(inkr)*km)
 
-    traces = io.load(settings.trace_filename)
+    try:
+        traces = io.load(settings.trace_filename)
+    except FileLoadError as e:
+        logger.info(e)
+        return 
 
     event = model.load_events(settings.event_filename)
     assert len(event)==1
     event = event[0]
     event.depth = float(settings.depth) * 1000.
-    base_source = DCSource.from_pyrocko_event(event)
+    base_source = MTSource.from_pyrocko_event(event)
 
     test_sources = []
     for d in test_depths:
         s = base_source.clone()
         s.depth = float(d)
         test_sources.append(s)
-
     if settings.store_superdirs:
         engine = LocalEngine(store_superdirs=settings.store_superdirs)
     else:
@@ -215,7 +224,8 @@ def plot(settings, show=False):
                 mod_targets.append(t)
             request = engine.process(targets=mod_targets, sources=test_sources)
         else:
-            raise error
+            logger.error("%s: %s" % (error, ".".join(station.nsl())))
+            return
 
     alldepths = list(test_depths)
     depth_count = dict(zip(sorted(alldepths), range(len(alldepths))))
@@ -256,7 +266,7 @@ def plot(settings, show=False):
         ax.plot(xdata, ydata, c='black', linewidth=1., alpha=1.)
         if False:
             ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color='black', alpha=0.5)
-        ax.text(zoom_window[0]*1.09, y_pos, '%i' % (s.depth/1000.), horizontalalignment='right') #, fontsize=12.)
+        ax.text(zoom_window[0]*1.09, y_pos, '%1.1f' % (s.depth/1000.), horizontalalignment='right') #, fontsize=12.)
         if False:
             mod = store.config.earthmodel_1d
             label = 'pP'
@@ -320,10 +330,10 @@ def plot(settings, show=False):
         zrange = zmax - zmin
         ax.set_ylim((zmin-zrange*0.2, zmax+zrange*0.2))
         ax.set_xlabel('Time [s]')
-        ax.text(-0.08, 0.6, 'Source depth [km]',
+        ax.text(0.0, 0.6, 'Source depth [km]',
                 rotation=90,
-                horizontalalignment='right',
-                transform=ax.transAxes) #, fontsize=12.)
+                horizontalalignment='left',
+                transform=fig.transFigure) #, fontsize=12.)
 
     if fill:
         ax.fill_between(xdata, y_pos, ydata, where=ydata<y_pos, color=settings.color, alpha=0.5)
@@ -332,7 +342,7 @@ def plot(settings, show=False):
         vline = ax.axvline(0., c='black')
         vline.set_linestyle('--')
     if settings.title:
-        params = {'array_id': '.'.join(station.nsl()),
+        params = {'array-id': ''.join(station.nsl()),
                   'event_name': event.name,
                   'event_time': time_to_str(event.time)}
         ax.text(0.5, 1.05, settings.title % params,
@@ -343,11 +353,19 @@ def plot(settings, show=False):
         cax.axis('off')
         cax.xaxis.set_visible(False)
         cax.yaxis.set_visible(False)
+        if settings.quantity == 'displacement':
+            quantity_info = 'integrated velocity trace. '
+        if settings.quantity == 'velocity':
+            quantity_info = 'differentiated synthetic traces. '
+        if settings.quantity == 'restituted':
+            quantity_info = 'restituted traces. '
+
         captions = {'filters':''}
         for f in settings.filters:
-            captions['filters'] += '%s pass, order %s, f$_c$=%s Hz, '%(f.type, f.order, f.corner)
+            captions['filters'] += '%s-pass, order %s, f$_c$=%s Hz. '%(f.type, f.order, f.corner)
+        captions['quantity_info'] = quantity_info
         captions['store_sampling'] = 1./store.config.deltat
-        cax.text(0, 0, 'Filters: %(filters)s GFDB sampled at %(store_sampling)s Hz.' % captions,
+        cax.text(0, 0, 'Filters: %(filters)s f$_{GF}$=%(store_sampling)s Hz.\n%(quantity_info)s' % captions,
                  fontsize=12, transform=cax.transAxes)
         plt.subplots_adjust(hspace=.4, bottom=0.15)
     else:
@@ -356,7 +374,9 @@ def plot(settings, show=False):
     ax.invert_yaxis()
     if settings.save_as:
         logger.info('save as: %s ' % settings.save_as)
-        fig.savefig(settings.save_as%{'array_id': '.'.join(station.nsl())}, dpi=160, bbox_inches='tight')
+        options = settings.__dict__
+        options.update({'array-id': ''.join(station.nsl())})
+        fig.savefig(settings.save_as % options, dpi=160, bbox_inches='tight')
     if show:
         plt.show()
 

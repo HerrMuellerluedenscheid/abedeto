@@ -53,7 +53,7 @@ class BeamForming(Object):
         self.station_c = None
         self.diff_dt_treat = diff_dt_treat
 
-    def process(self, event, timing, bazi=None, slow=None,  *args, **kwargs):
+    def process(self, event, timing, bazi=None, slow=None,  restitute=False, *args, **kwargs):
         '''
         :param timing: CakeTiming. Uses the definition without the offset.
         :param fn_dump_center: filename to where center stations shall be dumped
@@ -65,6 +65,7 @@ class BeamForming(Object):
         '''
         logger.debug('start beam forming')
         stations = self.stations
+        network_code = kwargs.get('responses', None)
         network_code = kwargs.get('network', '')
         station_code = kwargs.get('station', 'STK')
         c_station_id = (network_code, station_code)
@@ -81,7 +82,6 @@ class BeamForming(Object):
         fn_dump_center = kwargs.get('fn_dump_center', 'array_center.pf')
         fn_beam = kwargs.get('fn_beam', 'beam.mseed')
         if event:
-            mod_str = kwargs.get('model', None)
             mod = cake.load_model(crust2_profile=(event.lat, event.lon))
             dist = ortho.distance_accurate50m(event, self.station_c)
             ray = timing.t(mod, (event.depth, dist), get_ray=True)
@@ -98,7 +98,7 @@ class BeamForming(Object):
         else:
             self.bazi = bazi
             self.slow = slow
-        
+
         logger.info('stacking %s with slowness %1.4f s/km at back azimut %1.1f '
                     'degrees' %('.'.join(c_station_id), self.slow*cake.km, self.bazi))
 
@@ -128,8 +128,7 @@ class BeamForming(Object):
             if tr.nslc_id[:2] == c_station_id:
                 continue
             tr = tr.copy(data=True)
-            tr.ydata = tr.ydata.astype(num.float64)
-            tr.ydata -= tr.ydata.mean(dtype=num.float64)
+            tr.ydata = tr.ydata.astype(num.float64) - tr.ydata.mean(dtype=num.float64)
             tr.taper(taperer)
             try:
                 stack_trace = self.stacked[tr.channel]
@@ -253,17 +252,11 @@ class BeamForming(Object):
         ymax = y.max()
         ymin = y.min()
 
-        x_range = num.abs(xmax-xmin)
-        y_range = num.abs(ymax-ymin)
-
-        max_range = num.max([x_range, y_range])
-
         fig = plt.figure()
         cax = fig.add_axes([0.85, 0.2, 0.05, 0.5])
         ax = fig.add_axes([0.10, 0.1, 0.70, 0.7])
         ax.set_aspect('equal')
         cmap = cm.get_cmap('bwr')
-        print(sizes)
         ax.scatter(x, y, c=sizes, s=200, cmap=cmap,
                    vmax=num.max(sizes), vmin=-num.max(sizes))
         for i, lab in enumerate(stat_labels):

@@ -1,33 +1,49 @@
 #!/usr/bin/env python 
-import matplotlib
-matplotlib.use('Qt4Agg')
 import matplotlib.pyplot as plt
 import os
-from abedeto.beam_stack import BeamForming
-import abedeto.store_creator as store_creator
+import errno
+import logging
+import sys
+import matplotlib.pyplot as plt
+import glob
+
 from pyrocko import model
 from pyrocko import io
+from pyrocko import trace
+from pyrocko import crust2x2
+from pyrocko.io_common import FileLoadError
 from pyrocko.guts import Object, Dict, String, List, load as guts_load
-from abedeto.util import create_directory
+from pyrocko.gf.store import remake_dir, CannotCreate
+from pyrocko import orthodrome as ortho
+from pyrocko.fdsn import station as wsstation
+
+import abedeto.store_creator as store_creator
+from abedeto.beam_stack import BeamForming
+from abedeto.map import MapParameters, make_map
 from abedeto.request import DataProvider, CakeTiming
-import logging
-from abedeto.array_map import ArrayMap
 
 
 pjoin = os.path.join
-
 logging.basicConfig(level='INFO')
 logger = logging.getLogger('run')
 
+output_units = 'M'
 stores_superdir = 'stores'
 array_data = 'array_data'
+_event_fn = 'event.pf'
 event_fn = 'event.pf'
 km = 1000.
+_fn_data_provider = 'request.yaml'
+_crust = crust2x2.Crust2()
+_profile_keys = crust2x2.get_profile_keys()
+
 
 class StoreMapper(Object):
     mapping = Dict.T(String.T(), List.T(String.T()))
+
     def __getitem__(self, key):
         return self.mapping[key]
+
 
 def one_or_error(items):
     e = list(items)
@@ -36,9 +52,37 @@ def one_or_error(items):
     else:
         return e[0]
 
+
+def dictify_resps(respfiles):
+    out = {}
+    for r in respfiles:
+        resp = wsstation.Response.load(filename=r)
+        r = r.split('/')[-1]
+        r = r.replace("resp_", '')
+        r = r.replace(".yaml", '')
+        out[tuple(r.split('.'))] = resp
+    return out
+
+
+def restitute(traces, respfiles, freqlimits, tfade):
+    '''TODO dump and read as List '''
+    restituted = []
+    responses = dictify_resps(respfiles)
+    for tr in traces:
+        if tr.nslc_id not in responses:
+            logger.warn('No Response information for %s found. run "abedeto download --get-response"' % '.'.join(tr.nslc_id))
+            continue
+        response = responses[tr.nslc_id]
+        tr = tr.transfer(tfade, freqlimits, transfer_function=response, invert=True)
+        restituted.append(tr)
+
+    return restituted
+
+
 def one_2_list(items):
     if not isinstance(items, list):
         return [items]
+
 
 def init(args):
     if args.format=='catalog':
@@ -49,21 +93,24 @@ def init(args):
         if not isinstance(events, list):
             events = [events]
 
+    if len(events) == 0:
+        logger.warn('no events found')
+        sys.exit(0)
+
     if args.name and len(events)>1:
         logger.warn("Cannot use defined name if list of events. Will"
                         " use event names instead")
     for i_e, e in enumerate(events):
-        if e.name:
-            name = e.name
-        elif args.name:
+        if args.name is not None:
             name = args.name
             e.name = name
+        elif e.name:
+            name = e.name
         else:
             logger.warn("event name is empty. Skipping...")
             continue
-
-        create_directory(name, args.force)
-        create_directory(name, args.force)
+        remake_dir(name, args.force)
+        remake_dir(pjoin(name, stores_superdir), args.force)
 
         model.Event.dump_catalog([e], pjoin(name, event_fn))
         if args.download:
@@ -71,119 +118,319 @@ def init(args):
         logger.info('.' * 30)
         logger.info('Prepared project directory %s for you' % name)
 
+
 def download(args, event=None, prefix=''):
-    if not event:
-        event = model.Event.load_catalog(event_fn)
-        event = one_or_error(event)
-    provider = DataProvider()
-    try:
-        settings = args.download_settings
-        provider.download(event, settings=settings)
-    except (AttributeError, TypeError):
-        e = event
-        provider = DataProvider()
-        tmin = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-80', fallback_time=100.)
-        tmax = CakeTiming(phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+120', fallback_time=600.)
-        provider.download(e, timing=(tmin, tmax), prefix=prefix, dump_config=True)
+    if isinstance(args.projects, list):
+        fns = args.projects
+    else:
+        fns = ['.']
+
+    for event_dir in fns:
+        try:
+            event = list(model.Event.load_catalog(pjoin(event_dir, event_fn)))
+        except IOError as e:
+            if e.errno == errno.ENOTDIR:
+                logger.debug(e)
+                continue
+            raise e
+
+        assert len(event)==1
+        event = event[0]
+
+        if not event:
+            event = model.Event.load_catalog(event_fn)
+            event = one_or_error(event)
+        extra_kw = {'get_responses': args.get_responses,
+                    'want': args.want.split(','),
+                    'force': args.force,
+                    'event': event}
+        get_responses = args.get_responses
+        fn_data_provider = pjoin(event_dir, _fn_data_provider)
+        if os.path.isfile(fn_data_provider):
+            provider = DataProvider.load(filename=fn_data_provider)
+        else:
+            provider = DataProvider()
+
+        try:
+            settings = args.download_settings
+            provider.download(settings=settings, **extra_kw)
+        except (AttributeError, TypeError):
+            tmin = CakeTiming(
+                phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)-20',
+                fallback_time=100.)
+            tmax = CakeTiming(
+                phase_selection='first(p|P|PP|P(cmb)P(icb)P(icb)p(cmb)p)+40',
+                fallback_time=600.)
+            provider.download(timing=(tmin, tmax),
+                              prefix=pjoin(event_dir, prefix), **extra_kw)
+
+        provider.dump(filename=fn_data_provider)
 
 
 def beam(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
-    event = list(model.Event.load_catalog(event_fn))
-    assert len(event)==1
-    event = event[0]
-    provider = DataProvider.load(filename='request.yaml')
-    array_centers = []
-    for array_id in provider.use:
-        directory = pjoin(array_data, array_id)
-        traces = io.load(pjoin(directory, 'traces.mseed'))
-        stations = model.load_stations(pjoin(directory, 'stations.pf'))
-        bf = BeamForming(stations, traces, normalize=args.normalize)
-        bf.process(event=event,
-                   timing=provider.timings[array_id].timings[0],
-                   fn_dump_center=pjoin(directory, 'array_center.pf'),
-                   fn_beam=pjoin(directory, 'beam.mseed'),
-                   station=array_id)
-        if args.plot:
-            bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
+    if isinstance(args.projects, list):
+        fns = args.projects
+    else:
+        fns = ['.']
 
-        array_centers.append(bf.station_c)
+    for event_dir in fns:
+        logger.info(event_dir)
+        event = list(model.Event.load_catalog(pjoin(event_dir, event_fn)))
+        assert len(event)==1
+        event = event[0]
+        provider = DataProvider.load(filename=pjoin(event_dir,
+                                                    _fn_data_provider))
+        array_centers = []
+        for array_id in provider.use:
+            directory = pjoin(event_dir, array_data, array_id)
+            traces = io.load(pjoin(directory, 'traces.mseed'))
+            stations = model.load_stations(pjoin(directory, 'stations.pf'))
+            if args.restitute:
+                resp_files = glob.glob(pjoin(directory, 'responses/*'))
+                ftap = map(float, args.freqlimits.split(':'))
+                traces = restitute(traces, resp_files, ftap, args.fade)
+                if len(traces)==0:
+                    continue
+            bf = BeamForming(stations, traces, normalize=args.normalize)
+            bf.process(event=event,
+                       timing=provider.timings[array_id].timings[0],
+                       fn_dump_center=pjoin(directory, 'array_center.pf'),
+                       fn_beam=pjoin(directory, 'beam.mseed'),
+                       station=array_id)
+            if args.plot:
+                bf.plot(fn=pjoin(directory, 'beam_shifts.png'))
 
-    # how to define map dimensions?
-    #map = ArrayMap(stations=array_centers,
-    #               station_label_mapping=provider.use,
-    #               event=event)
-    #map.save(args.map_filename)
+            array_centers.append(bf.station_c)
+
 
 def propose_stores(args):
     from abedeto.get_bounds import get_bounds
-    store_mapper = StoreMapper()
-    if args.events:
-        events = list(model.Event.load_catalog(args.events))
-    else:
-        events = list(model.Event.load_catalog(event_fn))
 
+    if isinstance(args.projects, list):
+        fns = args.projects
+    else:
+        fns = ['.']
+
+    events = []
+    stations = []
+
+    store_mapper = StoreMapper()
+    # basics fine
     depths = args.depths.split(':')
     sdmin, sdmax, sddelta = map(lambda x: float(x), depths)
-    store_kwargs={'events':events,
-                  'superdir': args.store_dir,
+    store_kwargs={'superdir': args.store_dir,
                   'source_depth_min': sdmin,
                   'source_depth_max': sdmax,
                   'source_depth_delta': sddelta,
                   'sample_rate': args.sample_rate,
-                  'force_overwrite': args.force_overwrite,
+                  'force': args.force,
                   'run_ttt': args.ttt,
-                  'simplify': args.simplify}
+                  'force': args.force,
+                  'simplify': args.simplify,
+                  'distance_delta_max': args.dmax}
 
-    if args.station:
-        for s in model.load_stations(args.station):
-            station = model.load_stations(args.station)
-            station = one_or_error(station)
-            configid = store_creator.propose_store(station, **store_kwargs)
-    else:
-        provider = DataProvider.load(filename='request.yaml')
+    for event_dir in fns:
+        event_fn = pjoin(event_dir, _event_fn)
+        try:
+            events.extend(list(model.Event.load_catalog(event_fn)))
+        except IOError as e:
+            if e.errno == errno.ENOENT:
+                logger.debug('no file %s' % e)
+            elif e.errno == errno.ENOTDIR:
+                logger.debug(e)
+                continue
+            else:
+                raise e
+
+        try:
+            provider = DataProvider.load(filename=pjoin(event_dir,
+                                                    _fn_data_provider))
+        except IOError as e:
+            if e.errno == errno.ENOENT:
+                logger.debug('no file %s' % e)
+            else:
+                raise e
+
         for array_id in provider.use:
-            directory = pjoin(array_data, array_id)
-            station = model.load_stations(pjoin(directory, 'array_center.pf'))
-            station = one_or_error(station)
-            configids = store_creator.propose_store(station, **store_kwargs)
-            store_mapper.mapping[array_id] = configids
+            directory = pjoin(event_dir, array_data, array_id)
+            try:
+                stations.extend(model.load_stations(pjoin(directory,
+                                                           'array_center.pf')))
+            except IOError as e:
+                if e.errno == errno.ENOENT:
+                    logger.debug('no file %s' % e)
+                else:
+                    raise e
 
-        store_mapper.dump(filename='store_mapping.yaml')
+            #store_mapper.mapping[array_id] = configids
+
+        store_mapper.dump(filename=pjoin(event_dir, 'store_mapping.yaml'))
+    distances, models = store_creator.setup_distances_crusts(stations, events)
+    config_ids = store_creator.propose_stores(distances, models, **store_kwargs)
+    #     configids = store_creator.propose_store(station, **store_kwargs)
+
+    #     
+    # provider = DataProvider.load(filename=_fn_data_provider)
+    #     for array_id in provider.use:
+    #         directory = pjoin(array_data, array_id)
+    #         fn_array_center = pjoin(directory, 'array_center.pf')
+    #         if not os.path.isfile(fn_array_center):
+    #             logger.error("No such file: %s. Probably, you need to run 'abedeto beam', first." % fn_array_center)
+    #             return
+    #         station = model.load_stations(fn_array_center)
+    #         station = one_or_error(station)
+
+
+def get_profile_key(location):
+    return crust2x2.get_profile(location.lat, location.lon)._ident
+
 
 def process(args):
     from abedeto.guesstimate_depth_v02 import PlotSettings, plot
-    provider = DataProvider.load(filename='request.yaml')
-    if args.array_id:
-        array_ids = [args.array_id]
+    if isinstance(args.projects, list):
+        fns = args.projects
     else:
-        array_ids = provider.use
+        fns = ['.']
 
-    store_mapping = StoreMapper.load(filename='store_mapping.yaml')
-    for array_id in array_ids:
-        subdir = pjoin(array_data, array_id)
-        settings_fn = pjoin(subdir, 'plot_settings.yaml')
-        if os.path.isfile(settings_fn):
-            settings = PlotSettings.load(filename=pjoin(settings_fn))
-            settings.update_from_args(args)
+
+    for event_dir in fns:
+        provider = DataProvider.load(filename=pjoin(event_dir,
+                                                    _fn_data_provider))
+        if args.array_id:
+            array_ids = [args.array_id]
         else:
-            settings = PlotSettings.from_argument_parser(args)
+            array_ids = provider.use
 
-        if not settings.trace_filename:
-            settings.trace_filename = pjoin(subdir, 'beam.mseed')
-        if not settings.station_filename:
-            settings.station_filename = pjoin(subdir, 'array_center.pf')
-        if not settings.store_id:
-            if len(store_mapping[array_id])>1:
-                logging.exception(Exception('Found several store_ids for %s. Use'
-                        ' --array_id=STORE_ID to excplicitly set store' % array_id))
+        #store_mapping = StoreMapper.load(filename=pjoin(event_dir,
+                                                        #'store_mapping.yaml'))
+        event = one_or_error(list(model.Event.load_catalog(pjoin(event_dir,
+                                                           event_fn))))
+        source_crust = get_profile_key(event)
+        for array_id in array_ids:
+            subdir = pjoin(event_dir, array_data, array_id)
+            settings_fn = pjoin(subdir, 'plot_settings.yaml')
+            if os.path.isfile(settings_fn) and args.overwrite_settings:
+                settings = PlotSettings.load(filename=pjoin(settings_fn))
+                settings.update_from_args(args)
             else:
-                settings.store_id = store_mapping[array_id][0]
-        plot(settings)
-        if args.overwrite_settings:
-            settings.dump(filename=settings_fn)
-    if args.show:
-        plt.show()
+                settings = PlotSettings.from_argument_parser(args)
+
+            if not settings.trace_filename:
+                settings.trace_filename = pjoin(subdir, 'beam.mseed')
+            if not settings.station_filename:
+                fn_array_center = pjoin(subdir, 'array_center.pf')
+                settings.station_filename = fn_array_center
+                station = model.load_stations(fn_array_center)
+                station = one_or_error(station)
+                target_crust = get_profile_key(station)
+
+            #if not settings.store_id:
+            #    if len(store_mapping[array_id])>1:
+            #        logging.exception(Exception('Found several store_ids for %s. Use'
+            #                ' --array_id=STORE_ID to excplicitly set store' % array_id))
+                #else:
+            settings.store_id = '%s_%s_%s' % (array_id,
+                                              target_crust,
+                                              source_crust)
+            settings.event_filename = pjoin(event_dir, event_fn)
+            settings.save_as = pjoin(event_dir, "depth_%(array-id)s.png")
+            plot(settings)
+            if args.overwrite_settings:
+                settings.dump(filename=settings_fn)
+        if args.show:
+            plt.show()
+
+
+def mapify(args):
+    provider = DataProvider.load(filename=_fn_data_provider)
+    stations = []
+    for array_id in provider.use:
+        subdir = pjoin(array_data, array_id)
+        stations.append(one_or_error(model.load_stations(pjoin(subdir, 'array_center.pf'))))
+    event = one_or_error(list(model.Event.load_catalog(event_fn)))
+    dists = map(lambda x: ortho.distance_accurate50m(event, x), stations)
+    params = MapParameters(stations=stations,
+                           events=[event],
+                           lon=event.lon,
+                           lat=event.lat,
+                           radius=max(dists)*0.9,
+                           show_topo=args.show_topo,
+                           show_grid=False)
+    make_map(map_parameters=params)
+
+
+def try_ENOENT(f, kwargs=None):
+    try:
+        return f(**kwargs)
+    except IOError as e:
+        if e.errno == errno.ENOENT:
+            logger.debug('no file %s' % e)
+        else:
+            raise e
+
+def snuffle(args):
+    """Uses tmin timing object, without the offset to calculate the beam"""
+    if isinstance(args.projects, list):
+        fns = args.projects
+    else:
+        fns = ['.']
+
+    events = []
+    traces = []
+    stations = []
+    for event_dir in fns:
+        event_fn = pjoin(event_dir, _event_fn)
+        try:
+            events.extend(list(model.Event.load_catalog(event_fn)))
+        except IOError as e:
+            if e.errno == errno.ENOENT:
+                logger.debug('no file %s' % e)
+            elif e.errno == errno.ENOTDIR:
+                logger.debug(e)
+                continue
+            else:
+                raise e
+        fn_data_provider = pjoin(event_dir, _fn_data_provider)
+        provider = try_ENOENT(DataProvider.load, kwargs={'filename': fn_data_provider})
+        if provider is None:
+            logger.debug('no provider %s' % fn_data_provider)
+            continue
+
+        for array_id in provider.use:
+            directory = pjoin(event_dir, array_data, array_id)
+            fn_beam=pjoin(directory, 'beam.mseed')
+            try:
+                traces.extend(io.load(pjoin(directory, 'traces.mseed')))
+            except FileLoadError:
+                logger.debug('no file %s' %fn_beam)
+                pass
+
+            try:
+                traces.extend(io.load(fn_beam))
+            except FileLoadError:
+                logger.debug('no file %s' %fn_beam)
+                pass
+
+            try:
+                stations.extend(model.load_stations(pjoin(directory,
+                                                           'stations.pf')))
+            except IOError as e:
+                if e.errno == errno.ENOENT:
+                    logger.debug('no file %s' % e)
+                else:
+                    raise e
+            try:
+                stations.extend(
+                    model.load_stations(pjoin(directory, 'array_center.pf')))
+            except IOError as e:
+                if e.errno == errno.ENOENT:
+                    logger.debug('no file %s' % e)
+                else:
+                    raise e
+    stations = list(set(stations))
+    trace.snuffle(traces, stations=stations, events=events)
+
 
 def get_bounds(args):
     from abedeto.get_bounds import get_bounds
@@ -192,6 +439,7 @@ def get_bounds(args):
     directory = pjoin('array_data', args.array_id)
     stations = model.load_stations(pjoin(directory, 'array_center.pf'))
     get_bounds(stations, events=e, show_fig=True, km=True)
+
 
 if __name__=='__main__':
     import argparse
@@ -202,14 +450,14 @@ if __name__=='__main__':
     sp = parser.add_subparsers(dest='cmd')
     init_parser = sp.add_parser('init', help='create a new project')
     init_parser.add_argument('events', help='Event you don\'t know the depth of')
-    init_parser.add_argument('--name', help='name')
+    init_parser.add_argument('--name', help='name', default=None)
     init_parser.add_argument('--download',
                             action='store_true',
                             default=False,
                             help='download available data right away.')
     init_parser.add_argument('--force',
                             action='store_true',
-                            default=False,
+                            default=True,
                             help='force overwrite')
     init_parser.add_argument('--format',
                             default='catalog',
@@ -217,22 +465,49 @@ if __name__=='__main__':
                             help='[yaml|catalog], default catalog')
 
     download_parser = sp.add_parser('download', help='Download data')
-    download_parser.add_argument('--download',
-                                help='download available data',
-                                default=False,
-                                action='store_true')
+    download_parser.add_argument('projects', help='default "all available"',
+                             nargs='*', default=".")
+    download_parser.add_argument('--array-id',
+                                help='only download for this array',
+                                dest='want',
+                                default='all')
     download_parser.add_argument('--settings',
                                 help='Load download settings.',
                                 dest='download_settings',
                                 default=False)
+    download_parser.add_argument('--get-responses',
+                            action='store_true',
+                            default=False,
+                            dest='get_responses',
+                            help='get station meta infos')
+    download_parser.add_argument('--force',
+                            action='store_true',
+                            default=False,
+                            help='force overwrite')
 
     beam_parser = sp.add_parser('beam', help='Beam forming')
+    beam_parser.add_argument('projects', help='default "all available"',
+                             nargs='*', default=".")
     beam_parser.add_argument('--map_filename', help='filename of map',
                             default='map.png')
     beam_parser.add_argument('--normalize',
                             help='normlize by standard deviation of trace',
                             action='store_true',
                             default=True)
+    beam_parser.add_argument('--restitute',
+                            help='requires --get-responses when downloading. '
+                             'Using freqlimits defined with --freqlimits',
+                            action='store_true',
+                            default=False)
+    beam_parser.add_argument('--fade',
+                            help='time domain fader applied before restitution'
+                             'default=10 seconds',
+                             type=float,
+                            default=10.)
+    beam_parser.add_argument('--freqlimits',
+                            help='Frequency domain tapers for restitution.'
+                             'default=0.2:0.8:20:40',
+                            default='0.2:0.8:20:40')
     beam_parser.add_argument('--plot',
                             help='create plots showing stations and store them '
                             'in sub-directories',
@@ -240,6 +515,8 @@ if __name__=='__main__':
                             default=False)
 
     store_parser = sp.add_parser('stores', help='Propose GF stores')
+    store_parser.add_argument('projects', help='default "all available"',
+                             nargs='*', default=".")
     store_parser.add_argument('--super-dir',
                                 dest='store_dir',
                                 help='super directory where to search/create stores. Default: stores',
@@ -248,13 +525,12 @@ if __name__=='__main__':
     store_parser.add_argument('--sampling-rate', dest='sample_rate', type=float,
                                 help='samppling rate store [Hz]. Default 10',
                                 default=10.)
-    store_parser.add_argument('--force-store',
-                                dest='force_overwrite',
+    store_parser.add_argument('--force', dest='force', default=False,
                                 help='overwrite existent stores',
-                                action='store_false')
-    store_parser.add_argument('--events',
-                                dest='events',
-                                help='create stores that are suitable for all events in this file')
+                                action='store_true')
+    #store_parser.add_argument('--events',
+    #                            dest='events',
+    #                            help='create stores that are suitable for all events in this file')
     store_parser.add_argument('--ttt',
                                 dest='ttt',
                                 help='also generate travel time tables.',
@@ -263,20 +539,27 @@ if __name__=='__main__':
                                 help='Simplify model to increase performance '
                               'and in case of QSEIS lmax too small error.',
                                 action='store_true')
+    store_parser.add_argument('--dmax',
+                                help='maximum of distance delta config file.',
+                              type=float,
+                              default=None
+                                )
     store_parser.add_argument('--station', help='(Rather for standalone use. Optional)')
 
     process_parser = sp.add_parser('process', help='Create images')
-    process_parser.add_argument('--array_id',
-                                help='array_id to process',
+    process_parser.add_argument('projects', help='default "all available"',
+                             nargs='*', default=".")
+    process_parser.add_argument('--array-id', dest='array_id',
+                                help='array-id to process',
                                 required=False,
                                 default=False)
     process_parser.add_argument('--settings',
                                 help='settings file',
                                 default=False,
                                 required=False)
-    #process_parser.add_argument('--event',
-    #                    help='name of file containing event catalog',
-    #                    required=True)
+    process_parser.add_argument('--cc_align',
+                        help='dummy argument at the moment',
+                        required=False)
     process_parser.add_argument('--store-superdirs',
             help='super directory where to look for stores',
             dest='store_superdirs', nargs='*', default=['stores'], required=False)
@@ -295,7 +578,7 @@ if __name__=='__main__':
                         default='0:15:1', required=False)
     process_parser.add_argument('--quantity',
                         help='velocity|displacement',
-                        choices=['velocity', 'displacement'],
+                        choices=['velocity', 'displacement', 'restituted'],
                         required=False)
     process_parser.add_argument('--filter',
                         help='4th order butterw. default: "0.7:4.5"',
@@ -305,6 +588,9 @@ if __name__=='__main__':
     process_parser.add_argument('--gain', required=False,
                         help='gain factor', default=1.,
                                 type=float)
+    process_parser.add_argument('--zoom', required=False,
+                                help='time window to look at. default -7:15',
+                                default='-7:15')
 
     # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
@@ -334,23 +620,33 @@ if __name__=='__main__':
                         required=False)
     process_parser.add_argument('--out-filename',
                         help='file to store image',
-                        dest='outfn',
+                        dest='save_as',
                         required=False)
     process_parser.add_argument('--print-parameters', dest='print_parameters',
                         help='creates a text field giving the used parameters',
+                        required=False)
+    process_parser.add_argument('--title', dest='title',
+                        help='template for title.',
                         required=False)
     process_parser.add_argument('--overwrite-settings', dest='overwrite_settings',
                         help='overwrite former settings files', default=False,
                         action='store_true', required=False)
 
+    snuffle_parser = sp.add_parser('snuffle', help='Scrutinize waveforms')
+    snuffle_parser.add_argument('projects', help='default "all available"',
+                             nargs='*', default=".")
+
+    map_parser = sp.add_parser('map', help='Create map')
+    map_parser.add_argument('--topography', dest='show_topo',
+                        help='overlay topography', default=False,
+                        action='store_true', required=False)
+
     bounds_parser = sp.add_parser('bounds', help='get bounds of array vs catalog of events. '
-                                  'Helpful when generating stores for entire catalogs.')#, parents=[parser])
+                                  'Helpful when generating stores for entire catalogs.')
     bounds_parser.add_argument('--events',
                         help='events filename',
                         required=True)
-
     bounds_parser.add_argument('--array-id',
-                        help='array id',
                         dest='array_id',
                         required=True)
 
@@ -358,21 +654,30 @@ if __name__=='__main__':
 
     logging.basicConfig(level=args.log.upper())
 
-    if args.cmd == 'init':
-        init(args)
+    try:
+        if args.cmd == 'init':
+            init(args)
 
-    if args.cmd == 'download':
-        download(args)
+        if args.cmd == 'download':
+            download(args)
 
-    if args.cmd == 'stores':
-        propose_stores(args)
+        if args.cmd == 'stores':
+            propose_stores(args)
 
-    if args.cmd == 'beam':
-        beam(args)
+        if args.cmd == 'beam':
+            beam(args)
 
-    if args.cmd == 'process':
-        process(args)
+        if args.cmd == 'process':
+            process(args)
 
-    if args.cmd == 'bounds':
-        get_bounds(args)
+        if args.cmd == 'bounds':
+            get_bounds(args)
 
+        if args.cmd == 'map':
+            mapify(args)
+
+        if args.cmd == 'snuffle':
+            snuffle(args)
+
+    except CannotCreate as e:
+        logger.error('%s. Run with --force to overwrite existing data.' % e)
