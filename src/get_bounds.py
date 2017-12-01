@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 import argparse
 import numpy as num
-import matplotlib.pyplot as plt
-from pyrocko import model, orthodrome, util, gui_util
+from pyrocko import model, orthodrome, util
+from pyrocko.gui import util as gui_util
 
+import matplotlib.pyplot as plt
 
 def get_bounds(stations, events=None, usestations=False, printall=False, show_fig=False, km=False):
     scale = 1./1000. if km else 1
     if printall:
-        print 'using stations: '
+        print('using stations: ')
         for s in stations:
-            print s
-            print '.......................................\n\n\n'
+            print(s)
+            print('.......................................\n\n\n')
     maxdistances = []
     mindistances = []
     alldists = {}
@@ -26,12 +27,12 @@ def get_bounds(stations, events=None, usestations=False, printall=False, show_fi
         for e, dists in alldists.items():
             i = 0
             for s in stations:
-                print '%s \n %s DISTANCE: %s \n\n' % (e, s, dists[i])
-                print '='*20
+                print('%s \n %s DISTANCE: %s \n\n' % (e, s, dists[i]))
+                print('='*20)
                 i += 1
         if len(maxdistances)==1:
-            print 'maximum distances: ', maxdistances[0]
-            print 'minimum distances: ', mindistances[0]
+            print('maximum distances: ', maxdistances[0])
+            print('minimum distances: ', mindistances[0])
 
     if show_fig:
         f, axs = plt.subplots(2)

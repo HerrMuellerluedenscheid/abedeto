@@ -6,8 +6,7 @@ font = {'family' : 'normal',
         'size'   : 16}
 matplotlib.rc('font', **font)
 import math
-matplotlib.use = 'QtAgg4'
-import matplotlib.pyplot as plt
+#matplotlib.use = 'QtAgg4'
 import logging
 from pyrocko import io
 from pyrocko import model, cake
@@ -18,6 +17,7 @@ from pyrocko.util import str_to_time, time_to_str, match_nslc
 from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
+import matplotlib.pyplot as plt
 km = 1000.
 logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger('guesstimate')
@@ -521,7 +521,7 @@ class Inverter():
             fig = plt.figure()
             ax = fig.add_subplot(111)
             i_best_fits = num.argmin(misfits_array, 2)
-            print 'best fits: \n', i_best_fits
+            print('best fits: \n', i_best_fits)
             best_fits = num.min(misfits_array, 2)
             #cmap = matplotlib.cm.get_cmap()
             xmesh, ymesh = num.meshgrid(mesh_fc, mesh_fwidth)
