@@ -185,7 +185,7 @@ if __name__=='__main__':
                            color_wet=color_wet,
                            color_dry=color_dry)
     make_map(map_parameters=params)
-    print '.'*40
+    print('.'*40)
     fdomain_station_locs = []
     #with open('northkoreaplot/stations.table.mec', 'r') as f:
     #    for line in f.readlines():

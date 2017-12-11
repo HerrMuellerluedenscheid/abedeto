@@ -229,7 +229,7 @@ class DataProvider(Object):
                     store.remake_dir(sub_directory, force)
                     store.remake_dir(pjoin(sub_directory, 'responses'), force)
                     fn = pjoin(sub_directory, 'traces.mseed')
-                    with open(fn, 'w') as f:
+                    with open(fn, 'wb') as f:
                         f.write(d.read())
                         f.close()
                     if get_responses:
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument('--want', help='all|id1,id2,id3....', default='all')
     args = parser.parse_args()
     length = 1000.
-    print 'use first event in list as test'
+    print('use first event in list as test')
     e = list(model.Event.load_catalog(args.events))[0]
     provider = DataProvider(channels='*Z')
     tmin = CakeTiming(phase_selection='first(p|P|PP)-10', fallback_time=0.001)
