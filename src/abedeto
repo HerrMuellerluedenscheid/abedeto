@@ -492,13 +492,11 @@ if __name__=='__main__':
                             default='map.png')
     beam_parser.add_argument('--normalize',
                             help='normlize by standard deviation of trace',
-                            action='store_true',
-                            default=True)
+                            action='store_true')
     beam_parser.add_argument('--restitute',
                             help='requires --get-responses when downloading. '
                              'Using freqlimits defined with --freqlimits',
-                            action='store_true',
-                            default=False)
+                            action='store_true')
     beam_parser.add_argument('--fade',
                             help='time domain fader applied before restitution'
                              'default=10 seconds',
