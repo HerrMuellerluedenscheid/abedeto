@@ -150,10 +150,9 @@ class BeamForming(Object):
             nslc_id = tr.nslc_id
 
             try:
-                stats = filter(lambda x: util.match_nslc(
-                    '%s.%s.%s.*' % x.nsl(), nslc_id), stations)
+                stat = list(filter(lambda x: util.match_nslc(
+                    '%s.%s.%s.*' % x.nsl(), nslc_id), stations))[0]
 
-                stat = stats[0]
             except IndexError:
                 break
 
@@ -188,12 +187,12 @@ class BeamForming(Object):
 
     def checked_nslc(self, trs):
         for tr in trs:
-            oldids = tr.nslc_id
-            n,s,l,c = oldids
+            old_ids = tr.nslc_id
+            n, s, l, c = old_ids
             tr.set_codes(network=n[:2], station=s[:5], location=l[:2], channel=c[:3])
-            newids = tr.nslc_id
-            if cmp(oldids, newids) != 0:
-                logger.warn('nslc id truncated: %s to %s' % ('.'.join(oldids), '.'.join(newids)))
+            if old_ids != tr.nslc_id:
+                logger.warn('nslc id truncated: %s to %s' % (
+                    '.'.join(old_ids), '.'.join(tr.nslc_id)))
 
     def snuffle(self):
         '''Scrutinize the shifted traces.'''
