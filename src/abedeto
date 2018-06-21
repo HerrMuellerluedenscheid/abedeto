@@ -369,6 +369,7 @@ def try_ENOENT(f, kwargs=None):
         else:
             raise e
 
+
 def snuffle(args):
     """Uses tmin timing object, without the offset to calculate the beam"""
     if isinstance(args.projects, list):
@@ -433,12 +434,12 @@ def snuffle(args):
 
 
 def get_bounds(args):
-    from abedeto.get_bounds import get_bounds
+    from abedeto.get_bounds import get_bounds as gb
 
     e = list(model.Event.load_catalog(args.events))
     directory = pjoin('array_data', args.array_id)
     stations = model.load_stations(pjoin(directory, 'array_center.pf'))
-    get_bounds(stations, events=e, show_fig=True, km=True)
+    gb(stations, events=e, show_fig=True, km=True)
 
 
 if __name__=='__main__':
@@ -528,9 +529,6 @@ if __name__=='__main__':
     store_parser.add_argument('--force', dest='force', default=False,
                                 help='overwrite existent stores',
                                 action='store_true')
-    #store_parser.add_argument('--events',
-    #                            dest='events',
-    #                            help='create stores that are suitable for all events in this file')
     store_parser.add_argument('--ttt',
                                 dest='ttt',
                                 help='also generate travel time tables.',
@@ -567,9 +565,6 @@ if __name__=='__main__':
                         help='name of store id',
                         dest='store_id',
                         required=False)
-    #process_parser.add_argument('--pick',
-    #                    help='name of file containing p marker',
-    #                    required=True)
     process_parser.add_argument('--depth',
                         help='assumed source depth [km]',
                         required=False)
@@ -592,7 +587,6 @@ if __name__=='__main__':
                                 help='time window to look at. default -7:15',
                                 default='-7:15')
 
-    # MUSS WIEDER REIN NACH GRUPPIERUNG
     process_parser.add_argument('--normalize',
                         help='normalize traces to 1',
                         action='store_true',
@@ -658,26 +652,29 @@ if __name__=='__main__':
         if args.cmd == 'init':
             init(args)
 
-        if args.cmd == 'download':
+        elif args.cmd == 'download':
             download(args)
 
-        if args.cmd == 'stores':
+        elif args.cmd == 'stores':
             propose_stores(args)
 
-        if args.cmd == 'beam':
+        elif args.cmd == 'beam':
             beam(args)
 
-        if args.cmd == 'process':
+        elif args.cmd == 'process':
             process(args)
 
-        if args.cmd == 'bounds':
+        elif args.cmd == 'bounds':
             get_bounds(args)
 
-        if args.cmd == 'map':
+        elif args.cmd == 'map':
             mapify(args)
 
-        if args.cmd == 'snuffle':
+        elif args.cmd == 'snuffle':
             snuffle(args)
+
+        else:
+            parser.print_help()
 
     except CannotCreate as e:
         logger.error('%s. Run with --force to overwrite existing data.' % e)

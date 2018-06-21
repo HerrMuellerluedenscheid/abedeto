@@ -41,11 +41,9 @@ class ArrayMap(automap.Map):
                 *self.jxyr)
 
             for i_station, s in enumerate(self.stations):
-                if self.station_label_mapping:
-                    label = self.station_label_mapping[i_station]
-                else:
-                    label = "%s"%s.station
+                label = self.station_label_mapping.get(i_station, str(s.station))
                 self.add_label(s.lat, s.lon, label)
+
         if self.event:
             e = self.event
             if e.moment_tensor:
@@ -79,5 +77,3 @@ class ArrayMap(automap.Map):
             convert_graph(tmppath, outpath,
                           resolution=resolution, oversample=oversample,
                           size=size, width=width, height=height)
-
-

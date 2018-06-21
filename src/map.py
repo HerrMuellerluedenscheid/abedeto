@@ -1,19 +1,22 @@
 import numpy as num 
-from pyrocko import automap
 import math
+from pyrocko import automap
 from pyrocko import model, gmtpy
 from pyrocko.guts import Object, Float, List, String, Bool, Dict, Tuple, Int
 from pyrocko.model import Event
 from pyrocko.moment_tensor import magnitude_to_moment as mag2mom
 from pyrocko.moment_tensor import to6
 
+
+size_factor = 4.
+cm = 10.
+
+
 def uniso(m):
     xx = num.trace(m) / 3.
     mc = num.matrix([[xx, 0., 0.],[0., xx, 0.], [0., 0., xx]])
     return m - mc
 
-size_factor = 4.
-cm = 10.
 
 class MapParameters(Object):
     width = Float.T(help='width of map', optional=True, default=16)
@@ -23,9 +26,9 @@ class MapParameters(Object):
     radius = Float.T(help='radius of map')
     outfn = String.T(help='output filename', optional=True, default='map.png')
     stations = List.T(model.Station.T(), optional=True)
-    station_label_mapping = List.T(String.T(), optional=True, default=False)
+    station_label_mapping = List.T(String.T(), optional=True)
+    station_colors = Dict.T(String.T(), String.T(), optional=True)
     events = List.T(model.Event.T(), optional=True)
-    station_colors = Dict.T(String.T(), String.T(), optional=True, default=False)
     show_topo = Bool.T(optional=True, default=True)
     show_grid = Bool.T(optional=True, default=True)
     color_wet = Tuple.T(3, Int.T(), default=(200, 200, 200))
@@ -34,6 +37,7 @@ class MapParameters(Object):
     @classmethod
     def process_args(cls, *args, **kwargs):
         return cls(**kwargs)
+
 
 class JMap(automap.Map):
     def __init__(self, *args, **kwargs):
@@ -66,7 +70,6 @@ class JMap(automap.Map):
             gmt = gmtpy.GMT(config=gmtconf)
 
             layout = gmt.default_layout()
-
             layout.set_fixed_margins(*[x*cm for x in self._expand_margins()])
 
             widget = layout.get_widget()
@@ -86,10 +89,11 @@ class JMap(automap.Map):
             self._have_drawn_axes = False
             self._have_drawn_labels = False
 
+
 def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=None, stations_label_mapping=None, map_parameters=None, show_topo=True):
     if map_parameters:
-        lat=map_parameters.lat
-        lon=map_parameters.lon
+        lat = map_parameters.lat
+        lon = map_parameters.lon
         radius=map_parameters.radius
         outfn = map_parameters.outfn
         stations = map_parameters.stations
@@ -150,32 +154,31 @@ def make_map(lat=None, lon=None, radius=None, outfn=None, stations=None, events=
 
                 size_cm = math.sqrt(math.sqrt(mag2mom(e.moment_tensor.magnitude) / 10e7)) * size_factor
                 m = e.moment_tensor
-                #mc = uniso(m)
-                #mc = mc / e.moment_tensor.scalar_moment() * mag2mom(5.0)
-                #m6 = to6(c)
+                # mc = uniso(m)
+                # mc = mc / e.moment_tensor.scalar_moment() * mag2mom(5.0)
+                # m6 = to6(c)
                 m6 = m.m6_up_south_east()
-                #data = (e.lon), (e.lat) + (10,) + m6 + (1, 0, 0)
-                #data = lonlat_to_en1_km(e.lon, e.lat) + (10,) + m6 + (1, 0, 0)
-                #data = [e.lon, e.lat, 5, m6, 1,0,0]
+                # data = (e.lon), (e.lat) + (10,) + m6 + (1, 0, 0)
+                # data = lonlat_to_en1_km(e.lon, e.lat) + (10,) + m6 + (1, 0, 0)
+                # data = [e.lon, e.lat, 5, m6, 1,0,0]
                 eshift, nshift = shifts[i_e]
-                #data = (e.lon, e.lat, 10, m.strike1, m.dip1, m.rake1, 1, e.lon+eshift, e.lat+nshift, 'Test site')
+                # data = (e.lon, e.lat, 10, m.strike1, m.dip1, m.rake1, 1, e.lon+eshift, e.lat+nshift, 'Test site')
                 data = (e.lon, e.lat, 10, 1,1,1,0,0,0, 1, e.lon, e.lat, 'Test site')
-                if True:
-                    _map.gmt.psmeca(
-                        S='%s%g' % ('m', size_cm*2.0),
-                        #G=gmtpy.color(colors[e.cluster]),
-                        #G=colors[i_e],
-                        G='red',
-                        C='3p,0/0/0',
-                        #W='thinnest,%i/%i/%i' % (255, 255, 255),
-                        #L='thinnest,%i/%i/%i' % (255, 255, 255),
-                        in_rows=[data],
-                        *_map.jxyr)
+                _map.gmt.psmeca(
+                    S='%s%g' % ('m', size_cm*2.0),
+                    # G = gmtpy.color(colors[e.cluster]),
+                    # G = colors[i_e],
+                    G='red',
+                    C='3p,0/0/0',
+                    # W = 'thinnest,%i/%i/%i' % (255, 255, 255),
+                    # L = 'thinnest,%i/%i/%i' % (255, 255, 255),
+                    in_rows=[data],
+                    *_map.jxyr)
     _map.save(outpath=outfn)
+
 
 if __name__=='__main__':
     e = list(Event.load_catalog(filename='event.pf'))[0]
-    #stations = model.load_stations('arrays.pf')
     stations = model.load_stations('array_center.pf')
     color_wet = [200, 200, 200]
     color_dry = [253, 253, 253]
@@ -185,33 +188,3 @@ if __name__=='__main__':
                            color_wet=color_wet,
                            color_dry=color_dry)
     make_map(map_parameters=params)
-    print('.'*40)
-    fdomain_station_locs = []
-    #with open('northkoreaplot/stations.table.mec', 'r') as f:
-    #    for line in f.readlines():
-    #        lat, lon, c = line.split()
-    #        fdomain_station_locs.append((float(lat), float(lon)))
-
-    #stations = model.load_stations('northkoreaplot/stations.txt')
-    #station_codes = []
-    #filtered_stations = []
-    #tdomain = ['MDJ', 'INCN']
-    #tdomain_nsl = []
-    #fdomain_nsl = []
-    #for s in stations:
-    #    if s.station not in station_codes and (s.lat, s.lon) in fdomain_station_locs:
-    #        if s.station in tdomain:
-    #            tdomain_nsl.append(s.nsl())
-    #        else:
-    #            fdomain_nsl.append(s.nsl())
-    #        filtered_stations.append(s)
-    #        station_codes.append(s.station)
-    #station_colors = dict(zip(tdomain_nsl, ['blue']*len(tdomain_nsl)))
-    #station_colors.update(dict(zip(fdomain_nsl, ['black']*len(fdomain_nsl))))
-
-    #params = MapParameters(lat=39.4, lon=129.08, radius=1800000, outfn='station-map.pdf', stations=filtered_stations, events=[e],
-    #                       station_colors=station_colors,
-    #                       color_wet=color_wet,
-    #                       show_topo=False,
-    #                       color_dry=color_dry)
-    #make_map(map_parameters=params)
