@@ -161,7 +161,7 @@ def plot(settings, show=False):
     with_onset_line = False
     fill = True
     align_phase = 'P'
-    zoom_window = settings.zoom
+    zoom_window = list(settings.zoom)
     ampl_scaler = '4*standard deviation'
 
     quantity = settings.quantity
@@ -196,7 +196,7 @@ def plot(settings, show=False):
         return
 
     stations = model.load_stations(settings.station_filename)
-    station = filter(lambda s: match_nslc('%s.%s.%s.*' % s.nsl(), traces[0].nslc_id), stations)
+    station = list(filter(lambda s: match_nslc('%s.%s.%s.*' % s.nsl(), traces[0].nslc_id), stations))
     assert len(station) == 1
     station = station[0] 
     targets = [station_to_target(station, quantity=quantity, store_id=settings.store_id)]
