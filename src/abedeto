@@ -188,7 +188,7 @@ def beam(args):
             stations = model.load_stations(pjoin(directory, 'stations.pf'))
             if args.restitute:
                 resp_files = glob.glob(pjoin(directory, 'responses/*'))
-                ftap = map(float, args.freqlimits.split(':'))
+                ftap = list(map(float, args.freqlimits.split(':')))
                 traces = restitute(traces, resp_files, ftap, args.fade)
                 if len(traces)==0:
                     continue
