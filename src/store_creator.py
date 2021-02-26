@@ -28,6 +28,11 @@ def model_has_cmb(mod):
     return 'cmb' in [d.name for d in disks]
 
 
+def model_has_icb(mod):
+    disks = mod.discontinuities()
+    return 'icb' in [d.name for d in disks]
+
+
 def adjust_earthmodel_receiver_depth(config):
     rmod = config.earthmodel_receiver_1d
     smod = config.earthmodel_1d
@@ -155,7 +160,9 @@ def propose_stores(distances, models, superdir, source_depth_min=0.,
 
         config.earthmodel_1d = config.earthmodel_1d.extract(depth_max=zmax)
         begin_phase_defs = 'P,P\\,PP'
-        if model_has_cmb(config.earthmodel_1d):
+        if model_has_icb(config.earthmodel_1d):
+            begin_phase_defs += ',P(cmb)P(icb)P(icb)p(cmb)p,P(cmb)P<(icb)(cmb)p'
+        elif model_has_cmb(config.earthmodel_1d):
             begin_phase_defs += ',Pv_(cmb)p'
         config.modelling_code_id = modelling_code_id
         config.tabulated_phases=[
