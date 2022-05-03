@@ -6,7 +6,6 @@ font = {"family": "normal", "size": 16}
 matplotlib.rc("font", **font)
 import math
 
-# matplotlib.use = 'QtAgg4'
 import logging
 from pyrocko import io
 from pyrocko import model, cake
@@ -14,7 +13,6 @@ from pyrocko.trace import IntegrationResponse, FrequencyResponse
 from pyrocko.trace import ButterworthResponse, DifferentiationResponse
 from pyrocko.gf import DCSource, MTSource, Target, LocalEngine, seismosizer, meta
 from pyrocko.util import str_to_time, time_to_str, match_nslc
-from pyrocko.gui_util import load_markers
 from pyrocko.guts import Object, Float, String, List, Bool
 from pyrocko import orthodrome as ortho
 import matplotlib.pyplot as plt

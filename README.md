@@ -13,7 +13,7 @@ modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/p
 
     git clone https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool.git
     cd ArrayBeamDepthTool
-    sudo python setup.py install
+    python setup.py install
 
 ### Processing
 In general: If you need help add a ``--help`` to the command call in order to get additional information.
