@@ -141,7 +141,7 @@ class BeamForming(Object):
         elif self.diff_dt_treat == "oversample":
             dt = min([t.deltat for t in self.traces])
             for tr in self.traces:
-                tr.resample(min(dt))
+                tr.resample(dt)
 
         for tr in self.traces:
             if tr.nslc_id[:2] == c_station_id:

@@ -1,0 +1,7 @@
+examples/20*
+venv
+
+# jetbrains
+.idea
+build
+abedeto.egg-info/

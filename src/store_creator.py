@@ -7,8 +7,6 @@ from pyrocko.fomosto import qseis
 from pyrocko.gf.store import Store, remake_dir
 from pyrocko.gf.meta import Timing, ConfigTypeA, TPDef
 from pyrocko import cake
-from collections import defaultdict
-import copy
 import logging
 
 

@@ -13,7 +13,7 @@ modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/p
 
     git clone https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool.git
     cd ArrayBeamDepthTool
-    sudo python setup.py install
+    python setup.py install
 
 ### Processing
 In general: If you need help add a ``--help`` to the command call in order to get additional information.
@@ -35,8 +35,8 @@ to start querying IRIS, Geofon and BGR data centers for available array data. Op
 
     abedeto beam
 
-This step is done based on synthetic back-azimuth and slownesses calculated using pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` subfolders showing the applied delay times.
-If, in the previous step, the response information have been donwloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the the transfer function before stacking traces.
+This step is done based on synthetic back-azimuth and slownesses calculated using pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` sub-folders showing the applied delay times.
+If, in the previous step, the response information have been downloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the transfer function before stacking traces.
 
 
 With
@@ -61,7 +61,7 @@ You can modify those models as you please.
 *abedeto* will set some parameters depending on the penetration depth of the
 defined phase. E.g. it will remove everything beneath the turning point of the P ray
 path (plus 10 %) from the earth model and set a narrow slowness taper (see
-sub-folder: stores/'SOME\_STORE\_ID'/extra/qseis) depending on the P arrival. This
+sub-folder: `stores/'SOME\_STORE\_ID'/extra/qseis`) depending on the P arrival. This
 will decrease computational effort a lot.
 After that you can process them as it is explained in the 
 [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html).
@@ -80,17 +80,17 @@ Given that you restituted the traces when creating the beams, you have to define
 ### Further Information on Applications
 You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
 
-Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6. This will plot the beam at the y-axis intersept coinciding with a depth of 1.6 km.
+Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6. This will plot the beam at the y-axis intercept coinciding with a depth of 1.6 km.
 
 The number of synthetic traces to display can be modified using the ``--depths`` option. E.g. ``--depths=0.2:12:0.2`` will draw synthetic traces of sources between 0.2 and 12 km depths with an increment 0.2 km.
 
-Given that you have a GF store stored in a different location other then in the *stores* sub-directory of your project, you can specify that location: ``--store-superdirs=[comma separated list of directories]``. Futhermore, if the store is not given the default name which is "ArrayID-xx-yy" (xx and yy are Crust2.0 tile IDs) the specific store to use can be defined: ``--store=STORE_ID``.
+Given that you have a GF store stored in a different location other than in the *stores* subdirectory of your project, you can specify that location: ``--store-superdirs=[comma separated list of directories]``. Furthermore, if the store is not given the default name which is "ArrayID-xx-yy" (xx and yy are Crust2.0 tile IDs) the specific store to use can be defined: ``--store=STORE_ID``.
 
 Synthetic and recorded traces might not be well aligned. This can be corrected by appending a ``--correction=[some_seconds]`` to the last command. Notice that the dashed line indicating the synthetic onset might also be shifted with respect to the synthetic traces. The reason for this is that the onset calculation is (at the moment) only performed using the source site model.
 
 In order to change the visible time range, define a time window with respect to the synthetic onset. E.g: ``--zoom=-2.0:12`` will plot traces within a time window of 14 seconds length, starting 2 seconds before the synthetic P phase arrival.
 
-All traces are normalized using their minmum/maximum amplitude within the visible time-range. Additionally, a gain factor can be applied using ``--gain=[X]`` (X is a float).
+All traces are normalized using their minimum/maximum amplitude within the visible time-range. Additionally, a gain factor can be applied using ``--gain=[X]`` (X is a float).
 
 Filters are adjustable: e.g. ``--filter=1.1:9`` will apply a band-pass filter with corner frequencies between 1.1 and 9.0 Hz.
 
@@ -102,7 +102,7 @@ Running the init command on events where the *name* is not specified will fail. 
 
     abedeto init catalog.pf --name
 
-In order to avoid amiguity between projects this works only when one event is present in the given file.
+In order to avoid ambiguity between projects this works only when one event is present in the given file.
 By default, existing directories will not be overwritten unless appending ``--force`` to the command.
 
 For quicker feedback ``--show`` will visualize all results right away.
@@ -139,8 +139,8 @@ The hierarchy within the directory looks as follows::
 ### Notes on building stores
 #### Handling ``number of layers (lmax) defined too small``
 
-Especially at large distances, the ray's turning point can be deep resulting in an earthmodel (see store's config file) of great depth. In this case QSeis will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you QSeis' installation's ``qsglobal.h``, recompile and try again.
+Especially at large distances, the ray's turning point can be deep resulting in an earth-model (see store's config file) of great depth. In this case `QSeis` will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you `QSeis`' installation's `qsglobal.h`, recompile and try again.
 
 ### Citation of data
-I recommend to have a look at the [IRIS Citations](http://www.iris.edu/hq/iris_citations) 
+I recommend having a look at the [IRIS Citations](http://www.iris.edu/hq/iris_citations) 
 and [FDSN Citations](http://www.fdsn.org/citations/) section for acknowledgement.

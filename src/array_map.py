@@ -3,7 +3,6 @@ import math
 import shutil
 from pyrocko import model, gmtpy
 from pyrocko.moment_tensor import magnitude_to_moment as mag2mom
-from pyrocko.moment_tensor import to6
 from pyrocko.guts import Object, Float, String, List
 
 

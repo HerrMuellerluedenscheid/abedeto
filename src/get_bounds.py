@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import numpy as num
 from pyrocko import model, orthodrome, util
 from pyrocko.gui import util as gui_util
 

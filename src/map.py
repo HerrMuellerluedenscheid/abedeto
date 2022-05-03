@@ -5,7 +5,6 @@ from pyrocko import model, gmtpy
 from pyrocko.guts import Object, Float, List, String, Bool, Dict, Tuple, Int
 from pyrocko.model import Event
 from pyrocko.moment_tensor import magnitude_to_moment as mag2mom
-from pyrocko.moment_tensor import to6
 
 
 size_factor = 4.0
