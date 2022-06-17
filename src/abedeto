@@ -87,7 +87,10 @@ def one_2_list(items):
 
 
 def init(args):
-    if args.format == "catalog":
+    if args.format == "detect":
+        events = model.load_events(args.events)
+
+    elif args.format == "catalog":
         events = list(model.Event.load_catalog(args.events))
 
     elif args.format == "yaml":
@@ -112,7 +115,6 @@ def init(args):
         else:
             logger.warning("event name is empty. Skipping...")
             continue
-
         remake_dir(name, args.force)
         remake_dir(pjoin(name, stores_superdir), args.force)
 
@@ -497,9 +499,9 @@ if __name__ == "__main__":
     )
     init_parser.add_argument(
         "--format",
-        default="catalog",
-        choices=["yaml", "catalog", ""],
-        help="[yaml|catalog], default catalog",
+        default="detect",
+        choices=["detect", "yaml", "catalog"],
+        help="[detect|yaml|catalog], default catalog",
     )
 
     download_parser = sp.add_parser("download", help="Download data")
