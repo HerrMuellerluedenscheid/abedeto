@@ -21,7 +21,6 @@ from pyrocko.io_common import FileLoadError
 
 
 km = 1000.0
-logging.basicConfig(loglevel="DEBUG")
 logger = logging.getLogger("guesstimate")
 arglist = [
     "station_filename",

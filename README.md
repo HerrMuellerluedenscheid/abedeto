@@ -2,11 +2,11 @@
 
 ### Prerequisites:
 
-* [pyrocko](http://emolch.github.io/pyrocko/)
+* [Pyrocko](https://pyrocko.org/)
 
 If you don't have appropriate Green's function databases you also need to install the
-modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html) in the
-"Creating a new Green's function store" paragraph.
+modelling codes as described in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html) in the
+[Creating a new Green's function store](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html#creating-a-new-green-s-function-store) paragraph.
 
 ### Download and Installation
 
@@ -21,8 +21,8 @@ Initialize a project:
 
     abedeto init <catalog>
 
-where <catalog> is a [Pyrocko](http://emolch.github.io/pyrocko/) compatible <catalog> of one or several events. Have a look at the
-[Iquique example](https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool/blob/master/examples/iquique_example.pf) to see an example of such a file.
+where <catalog> is a [Pyrocko](https://pyrocko.org) compatible <catalog> of one or several events. Have a look at the
+[Iquique example](https://github.com/HerrMuellerluedenscheid/abedeto/blob/master/examples/iquique_example.pf) to see an example of such a file.
 This will create project folders for each event within the catalog.
 Change into one of the created project directories and run
 
@@ -34,7 +34,7 @@ to start querying IRIS, Geofon and BGR data centers for available array data. Op
 
     abedeto beam
 
-This step is done based on synthetic back-azimuth and slownesses calculated using Pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` sub-folders showing the applied delay times.
+This step is done based on synthetic back-azimuth and slownesses calculated using Pyrocko's [cake](https://pyrocko.org/docs/current/apps/cake/manual.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file ``beam_shifts.png`` inside each of the ``array_data`` sub-folders showing the applied delay times.
 If, in the previous step, the response information have been downloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the transfer function before stacking traces.
 
 
@@ -42,7 +42,7 @@ With
 
     abedeto snuffle
 
-you can scrutinize waveforms, beams and make use of many other features provided by [snuffler](http://emolch.github.io/pyrocko/current/snuffler.html).
+you can scrutinize waveforms, beams and make use of many other features provided by [Snuffler](https://pyrocko.org/docs/current/apps/snuffler/index.html).
 
 Also, *abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
@@ -62,12 +62,11 @@ defined phase. E.g. it will remove everything beneath the turning point of the P
 path (plus 10 %) from the earth model and set a narrow slowness taper (see
 sub-folder: `stores/'SOME\_STORE\_ID'/extra/qseis`) depending on the P arrival. This
 will decrease computational effort a lot.
-After that you can process them as it is explained in the 
-[Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html).
+After that you can process them as it is explained in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html).
 Most likely, you want to run the commands
 
-    fomosto ttt			# Interpolate travel time tables
-    fomosto build		# Start generating data bases
+    fomosto ttt         # Interpolate travel time tables
+    fomosto build       # Start generating data bases
 
 Having finished this, run
 
