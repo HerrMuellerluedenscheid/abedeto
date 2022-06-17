@@ -112,6 +112,7 @@ def init(args):
         else:
             logger.warning("event name is empty. Skipping...")
             continue
+
         remake_dir(name, args.force)
         remake_dir(pjoin(name, stores_superdir), args.force)
 
@@ -459,27 +460,27 @@ def dq(x):
 
 
 def ldq(xs):
-    return ', '.join(dq(x) for x in xs)
+    return ", ".join(dq(x) for x in xs)
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        "abedeto",
-        description="What was the depth, again?",
-        add_help=True)
+        "abedeto", description="What was the depth, again?", add_help=True
+    )
 
     loglevel_choices = ["critical", "error", "warning", "info", "debug"]
     loglevel_default = "info"
 
     parser.add_argument(
-        '--log',
+        "--log",
         choices=loglevel_choices,
         default=loglevel_default,
-        metavar='LEVEL',
-        help='set logger level. Choices: %s. Default: %s.' % (
-            ldq(loglevel_choices), dq(loglevel_default)))
+        metavar="LEVEL",
+        help="set logger level. Choices: %s. Default: %s."
+        % (ldq(loglevel_choices), dq(loglevel_default)),
+    )
 
     sp = parser.add_subparsers(dest="cmd")
     init_parser = sp.add_parser("init", help="Create a new project")
@@ -747,7 +748,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    util.setup_logging('abedeto', args.log.lower())
+    util.setup_logging("abedeto", args.log.lower())
 
     try:
         if args.cmd == "init":
