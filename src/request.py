@@ -11,7 +11,6 @@ import logging
 
 
 pjoin = os.path.join
-logging.basicConfig(level="INFO")
 logger = logging.getLogger("data-request")
 
 
