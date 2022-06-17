@@ -5,7 +5,7 @@
 * [Pyrocko](https://pyrocko.org/)
 
 If you don't have appropriate Green's function databases you also need to install the
-modelling codes as described in the [Fomosto Tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html) in the
+modelling codes as described in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html) in the
 [Creating a new Green's function store](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html#creating-a-new-green-s-function-store) paragraph.
 
 ### Download and Installation
@@ -34,7 +34,7 @@ to start querying IRIS, Geofon and BGR data centers for available array data. Op
 
     abedeto beam
 
-This step is done based on synthetic back-azimuth and slownesses calculated using Pyrocko's [cake](https://pyrocko.org/docs/current/apps/cake/manual.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` sub-folders showing the applied delay times.
+This step is done based on synthetic back-azimuth and slownesses calculated using Pyrocko's [cake](https://pyrocko.org/docs/current/apps/cake/manual.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file ``beam_shifts.png`` inside each of the ``array_data`` sub-folders showing the applied delay times.
 If, in the previous step, the response information have been downloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the transfer function before stacking traces.
 
 
@@ -42,7 +42,7 @@ With
 
     abedeto snuffle
 
-you can scrutinize waveforms, beams and make use of many other features provided by [snuffler](https://pyrocko.org/docs/current/apps/snuffler/index.html).
+you can scrutinize waveforms, beams and make use of many other features provided by [Snuffler](https://pyrocko.org/docs/current/apps/snuffler/index.html).
 
 Also, *abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
@@ -62,7 +62,7 @@ defined phase. E.g. it will remove everything beneath the turning point of the P
 path (plus 10 %) from the earth model and set a narrow slowness taper (see
 sub-folder: `stores/'SOME\_STORE\_ID'/extra/qseis`) depending on the P arrival. This
 will decrease computational effort a lot.
-After that you can process them as it is explained in the [Fomosto Tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html).
+After that you can process them as it is explained in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html).
 Most likely, you want to run the commands
 
     fomosto ttt			# Interpolate travel time tables
