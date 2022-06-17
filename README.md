@@ -3,7 +3,6 @@
 ### Prerequisites:
 
 * [pyrocko](http://emolch.github.io/pyrocko/)
-* [progressbar](https://pypi.python.org/pypi/progressbar) (optional)
 
 If you don't have appropriate Green's function databases you also need to install the
 modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html) in the
