@@ -22,7 +22,7 @@ Initialize a project:
     abedeto init <catalog>
 
 where <catalog> is a [Pyrocko](http://emolch.github.io/pyrocko/) compatible <catalog> of one or several events. Have a look at the
-[iquique example](https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool/blob/master/examples) to see an example of such a file.
+[Iquique example](https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool/blob/master/examples/iquique_example.pf) to see an example of such a file.
 This will create project folders for each event within the catalog.
 Change into one of the created project directories and run
 
@@ -52,7 +52,7 @@ Set the depth range to test by appending
 
         --depths z_min:z_max:z_delta
 
-to the previous command. Values are to be given in kilometers. Default is 0:15:1
+to the previous command. Values are to be given in kilometers. Default is ``0:15:1``
 km.
 The proposed stores' config files contain a source and a receiver site model. These are 
 combinations of the crust2 models at the top and beneath the AK135 model. 
