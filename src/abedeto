@@ -68,7 +68,7 @@ def restitute(traces, respfiles, freqlimits, tfade):
     responses = dictify_resps(respfiles)
     for tr in traces:
         if tr.nslc_id not in responses:
-            logger.warn(
+            logger.warning(
                 'No Response information for %s found. run "abedeto download --get-response"'
                 % ".".join(tr.nslc_id)
             )
@@ -96,11 +96,11 @@ def init(args):
             events = [events]
 
     if len(events) == 0:
-        logger.warn("no events found")
+        logger.warning("no events found")
         sys.exit(0)
 
     if args.name and len(events) > 1:
-        logger.warn(
+        logger.warning(
             "Cannot use defined name if list of events. Will" " use event names instead"
         )
     for i_e, e in enumerate(events):
@@ -110,7 +110,7 @@ def init(args):
         elif e.name:
             name = e.name
         else:
-            logger.warn("event name is empty. Skipping...")
+            logger.warning("event name is empty. Skipping...")
             continue
         remake_dir(name, args.force)
         remake_dir(pjoin(name, stores_superdir), args.force)
