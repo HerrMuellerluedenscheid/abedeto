@@ -6,6 +6,7 @@ import sys
 import matplotlib.pyplot as plt
 import glob
 
+from pyrocko import util
 from pyrocko import model
 from pyrocko import io
 from pyrocko import trace
@@ -23,7 +24,6 @@ from abedeto.request import DataProvider, CakeTiming
 
 
 pjoin = os.path.join
-logging.basicConfig(level="INFO")
 logger = logging.getLogger("run")
 
 output_units = "M"
@@ -453,17 +453,36 @@ def get_bounds(args):
     gb(stations, events=e, show_fig=True, km=True)
 
 
+def dq(x):
+    # return '"%s"' % x
+    return x
+
+
+def ldq(xs):
+    return ', '.join(dq(x) for x in xs)
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
         "abedeto",
         description="What was the depth, again?",
-        add_help=False)
-    parser.add_argument("--log", required=False, default="INFO")
+        add_help=True)
+
+    loglevel_choices = ["critical", "error", "warning", "info", "debug"]
+    loglevel_default = "info"
+
+    parser.add_argument(
+        '--log',
+        choices=loglevel_choices,
+        default=loglevel_default,
+        metavar='LEVEL',
+        help='set logger level. Choices: %s. Default: %s.' % (
+            ldq(loglevel_choices), dq(loglevel_default)))
 
     sp = parser.add_subparsers(dest="cmd")
-    init_parser = sp.add_parser("init", help="create a new project")
+    init_parser = sp.add_parser("init", help="Create a new project")
     init_parser.add_argument("events", help="Event you don't know the depth of")
     init_parser.add_argument("--name", help="name", default=None)
     init_parser.add_argument(
@@ -720,7 +739,7 @@ if __name__ == "__main__":
 
     bounds_parser = sp.add_parser(
         "bounds",
-        help="get bounds of array vs catalog of events. "
+        help="Get bounds of array vs catalog of events. "
         "Helpful when generating stores for entire catalogs.",
     )
     bounds_parser.add_argument("--events", help="events filename", required=True)
@@ -728,7 +747,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.log.upper())
+    util.setup_logging('abedeto', args.log.lower())
 
     try:
         if args.cmd == "init":
