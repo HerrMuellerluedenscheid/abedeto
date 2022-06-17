@@ -65,8 +65,8 @@ will decrease computational effort a lot.
 After that you can process them as it is explained in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html).
 Most likely, you want to run the commands
 
-    fomosto ttt			# Interpolate travel time tables
-    fomosto build		# Start generating data bases
+    fomosto ttt         # Interpolate travel time tables
+    fomosto build       # Start generating data bases
 
 Having finished this, run
 
