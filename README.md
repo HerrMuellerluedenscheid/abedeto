@@ -28,7 +28,7 @@ Change into one of the created project directories and run
 
     abedeto download
 
-to start querying IRIS, Geofon and BGR data centers for available array data. Optionally, the frequency response information can be downloaded, too by appending ``--get-responses`` but this takes much longer, then.
+to start querying IRIS, Geofon and BGR data centers for available array data. Optionally, the frequency response information can be downloaded, too by appending ``--get-responses``.
 
 *Abedeto* can do beamforming. Run
 
