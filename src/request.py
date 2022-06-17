@@ -11,15 +11,7 @@ import logging
 
 
 pjoin = os.path.join
-logging.basicConfig(level="INFO")
 logger = logging.getLogger("data-request")
-
-
-try:
-    import progressbar
-except ImportError:
-    logger.debug("progressbar module not available")
-    progressbar = False
 
 
 class CakeTiming(Object):
@@ -233,6 +225,7 @@ class DataProvider(Object):
                 elif timing:
                     tstart = timing[0].t(mod, (event.depth, min_dist))
                     tend = timing[1].t(mod, (event.depth, max_dist))
+
                 selection = [
                     c + tuple((event.time + tstart, event.time + tend)) for c in codes
                 ]
@@ -247,13 +240,15 @@ class DataProvider(Object):
                     if get_responses:
                         trs = io.load(fn, getdata=False)
                         logger.info("Request responses from %s" % site)
-                        if progressbar:
-                            pb = progressbar.ProgressBar(maxval=len(trs)).start()
+
+                        st = ws.station(
+                            site=site,
+                            selection=selection,
+                            level="response",
+                        )
+
                         for i_tr, tr in enumerate(trs):
                             try:
-                                st = ws.station(
-                                    site=site, selection=selection, level="response"
-                                )
                                 pzresponse = st.get_pyrocko_response(
                                     nslc=tr.nslc_id,
                                     timespan=(tr.tmin, tr.tmax),
@@ -276,10 +271,6 @@ class DataProvider(Object):
                                     "resp_%s.yaml" % ".".join(tr.nslc_id),
                                 )
                             )
-                            if progressbar:
-                                pb.update(i_tr)
-                        if progressbar:
-                            pb.finish()
                     model.dump_stations(stations, pjoin(sub_directory, "stations.pf"))
 
                     if timing:

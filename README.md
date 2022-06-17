@@ -3,7 +3,6 @@
 ### Prerequisites:
 
 * [pyrocko](http://emolch.github.io/pyrocko/)
-* [progressbar](https://pypi.python.org/pypi/progressbar) (optional)
 
 If you don't have appropriate Green's function databases you also need to install the
 modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/pyrocko/v0.3/fomosto.html) in the
@@ -22,20 +21,20 @@ Initialize a project:
 
     abedeto init <catalog>
 
-where <catalog> is a [pyrocko](http://emolch.github.io/pyrocko/) compatible <catalog> of one or several events. Have a look at the
-[iquique example](https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool/blob/master/examples) to see an example of such a file.
+where <catalog> is a [Pyrocko](http://emolch.github.io/pyrocko/) compatible <catalog> of one or several events. Have a look at the
+[Iquique example](https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool/blob/master/examples/iquique_example.pf) to see an example of such a file.
 This will create project folders for each event within the catalog.
 Change into one of the created project directories and run
 
     abedeto download
 
-to start querying IRIS, Geofon and BGR data centers for available array data. Optionally, the frequency response information can be downloaded, too by appending ``--get-responses`` but this takes much longer, then.
+to start querying IRIS, Geofon and BGR data centers for available array data. Optionally, the frequency response information can be downloaded, too by appending ``--get-responses``.
 
 *Abedeto* can do beamforming. Run
 
     abedeto beam
 
-This step is done based on synthetic back-azimuth and slownesses calculated using pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` sub-folders showing the applied delay times.
+This step is done based on synthetic back-azimuth and slownesses calculated using Pyrocko's [cake](http://emolch.github.io/pyrocko/v0.3/cake_doc.html) module. In order to verify correct delay times used to stack traces use ``--plot``. After processing finished, there is a file *beam_shifts.png* inside each of the ``array_data`` sub-folders showing the applied delay times.
 If, in the previous step, the response information have been downloaded, too, you can exploit them now. Append a ``--restitute`` in order to deconvolve the transfer function before stacking traces.
 
 
@@ -53,7 +52,7 @@ Set the depth range to test by appending
 
         --depths z_min:z_max:z_delta
 
-to the previous command. Values are to be given in kilometers. Default is 0:15:1
+to the previous command. Values are to be given in kilometers. Default is ``0:15:1``
 km.
 The proposed stores' config files contain a source and a receiver site model. These are 
 combinations of the crust2 models at the top and beneath the AK135 model. 
@@ -80,7 +79,7 @@ Given that you restituted the traces when creating the beams, you have to define
 ### Further Information on Applications
 You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
 
-Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6. This will plot the beam at the y-axis intercept coinciding with a depth of 1.6 km.
+Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6``. This will plot the beam at the y-axis intercept coinciding with a depth of 1.6 km.
 
 The number of synthetic traces to display can be modified using the ``--depths`` option. E.g. ``--depths=0.2:12:0.2`` will draw synthetic traces of sources between 0.2 and 12 km depths with an increment 0.2 km.
 
@@ -94,7 +93,7 @@ All traces are normalized using their minimum/maximum amplitude within the visib
 
 Filters are adjustable: e.g. ``--filter=1.1:9`` will apply a band-pass filter with corner frequencies between 1.1 and 9.0 Hz.
 
-Currently, no restitution is performed. However, the quantity can be changed using ``--quantity [displacement|velocity]`` which either integrates the beam or differentiates the synthetic traces, respectively. It is possible to retrieve response functions for each trace using ``--get-repsponses``. These can be found afterwards in the underlying data directory and can be used to restitute, manually.
+Currently, no restitution is performed. However, the quantity can be changed using ``--quantity [displacement|velocity]`` which either integrates the beam or differentiates the synthetic traces, respectively. It is possible to retrieve response functions for each trace using ``--get-responses``. These can be found afterwards in the underlying data directory and can be used to restitute, manually.
 
 Some rudimentary information can be added as a caption to the figure by settings the ``--auto-caption`` flag.
 
