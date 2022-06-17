@@ -11,9 +11,9 @@ modelling codes as described in the [Fomosto Tutorial](http://emolch.github.io/p
 
 ### Download and Installation
 
-    git clone https://github.com/HerrMuellerluedenscheid/ArrayBeamDepthTool.git
-    cd ArrayBeamDepthTool
-    python setup.py install
+    git clone https://github.com/HerrMuellerluedenscheid/abedeto.git
+    cd abedeto
+    pip install --no-deps .
 
 ### Processing
 In general: If you need help add a ``--help`` to the command call in order to get additional information.
