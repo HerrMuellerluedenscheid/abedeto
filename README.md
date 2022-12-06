@@ -21,7 +21,7 @@ Initialize a project:
 
     abedeto init <catalog>
 
-where <catalog> is a [Pyrocko](https://pyrocko.org) compatible <catalog> of one or several events. Have a look at the
+where `<catalog>` is a [Pyrocko](https://pyrocko.org) compatible `<catalog>` of one or several events. Have a look at the
 [Iquique example](https://github.com/HerrMuellerluedenscheid/abedeto/blob/master/examples/iquique_example.pf) to see an example of such a file.
 This will create project folders for each event within the catalog.
 Change into one of the created project directories and run
