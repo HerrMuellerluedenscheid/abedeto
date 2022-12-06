@@ -1,8 +1,14 @@
 import shutil
 import os
+import sys
 import logging
 
 logger = logging.getLogger("util")
+
+
+def fail(message):
+    logger.critical(message)
+    sys.exit(1)
 
 
 def create_directory(directory, force):

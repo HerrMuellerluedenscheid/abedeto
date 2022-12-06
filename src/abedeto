@@ -2,7 +2,6 @@
 import os
 import errno
 import logging
-import sys
 import matplotlib.pyplot as plt
 import glob
 
@@ -12,7 +11,7 @@ from pyrocko import io
 from pyrocko import trace
 from pyrocko import crust2x2
 from pyrocko.io_common import FileLoadError
-from pyrocko.guts import Object, Dict, String, List, load as guts_load
+from pyrocko.guts import Object, Dict, String, List
 from pyrocko.gf.store import remake_dir, CannotCreate
 from pyrocko import orthodrome as ortho
 from pyrocko.fdsn import station as wsstation
@@ -21,6 +20,7 @@ import abedeto.store_creator as store_creator
 from abedeto.beam_stack import BeamForming
 from abedeto.map import MapParameters, make_map
 from abedeto.request import DataProvider, CakeTiming
+from abedeto.util import fail
 
 
 pjoin = os.path.join
@@ -87,42 +87,30 @@ def one_2_list(items):
 
 
 def init(args):
-    if args.format == "detect":
-        events = model.load_events(args.events)
+    events = model.load_events(args.events)
 
-    elif args.format == "catalog":
-        events = list(model.Event.load_catalog(args.events))
+    if args.event is not None:
+        events = [event for event in events if args.event == event.name]
+        if len(events) == 0:
+            fail('No event named "%s" found in catalog "%s".' % (
+                args.event, args.events))
+    else:
+        if len(events) == 0:
+            fail('No events found in catalog "%s".' % args.events)
 
-    elif args.format == "yaml":
-        events = guts_load(filename=args.events)
-        if not isinstance(events, list):
-            events = [events]
+    for ievent, event in enumerate(events):
 
-    if len(events) == 0:
-        logger.warning("no events found")
-        sys.exit(0)
+        if not event.name:
+            fail(
+                'No event name given for event %i in in catalog "%s".'
+                % (ievent, args.events)
+            )
 
-    if args.name and len(events) > 1:
-        logger.warning(
-            "Cannot use defined name if list of events. Will" " use event names instead"
-        )
-    for i_e, e in enumerate(events):
-        if args.name is not None:
-            name = args.name
-            e.name = name
-        elif e.name:
-            name = e.name
-        else:
-            logger.warning("event name is empty. Skipping...")
-            continue
-        remake_dir(name, args.force)
-        remake_dir(pjoin(name, stores_superdir), args.force)
+        remake_dir(event.name, args.force)
+        remake_dir(pjoin(event.name, stores_superdir), args.force)
 
-        model.Event.dump_catalog([e], pjoin(name, event_fn))
-        if args.download:
-            download(args, event=e, prefix=name)
-        logger.info("." * 30)
-        logger.info("Prepared project directory %s for you" % name)
+        model.Event.dump_catalog([event], pjoin(event.name, event_fn))
+        logger.info("Prepared project directory: %s" % event.name)
 
 
 def download(args, event=None, prefix=""):
@@ -480,22 +468,19 @@ if __name__ == "__main__":
         choices=loglevel_choices,
         default=loglevel_default,
         metavar="LEVEL",
-        help="set logger level. Choices: %s. Default: %s."
+        help="set logger level (choices: %s. Default: %s)"
         % (ldq(loglevel_choices), dq(loglevel_default)),
     )
 
-    sp = parser.add_subparsers(dest="cmd")
-    init_parser = sp.add_parser("init", help="Create a new project")
-    init_parser.add_argument("events", help="Event you don't know the depth of")
-    init_parser.add_argument("--name", help="name", default=None)
+    sp = parser.add_subparsers(dest="cmd", metavar="SUBCOMMAND")
+    init_parser = sp.add_parser("init", help="create new project directory", description="Create new project directory.")
     init_parser.add_argument(
-        "--download",
-        action="store_true",
-        default=False,
-        help="download available data right away.",
+        "events", help="catalog with event information", metavar="CATALOG"
     )
     init_parser.add_argument(
-        "--force", action="store_true", default=True, help="force overwrite"
+        "--event", metavar="NAME", help="only select event NAME from catalog")
+    init_parser.add_argument(
+        "--force", action="store_true", default=False, help="force overwrite"
     )
     init_parser.add_argument(
         "--format",
@@ -504,7 +489,7 @@ if __name__ == "__main__":
         help="[detect|yaml|catalog], default catalog",
     )
 
-    download_parser = sp.add_parser("download", help="Download data")
+    download_parser = sp.add_parser("download", help="download seismic waveforms")
     download_parser.add_argument(
         "projects", help='default "all available"', nargs="*", default="."
     )
@@ -528,7 +513,7 @@ if __name__ == "__main__":
         "--force", action="store_true", default=False, help="force overwrite"
     )
 
-    beam_parser = sp.add_parser("beam", help="Beam forming")
+    beam_parser = sp.add_parser("beam", help="stack observed waveforms (beamforming)")
     beam_parser.add_argument(
         "projects", help='default "all available"', nargs="*", default="."
     )
@@ -566,7 +551,7 @@ if __name__ == "__main__":
         default=False,
     )
 
-    store_parser = sp.add_parser("stores", help="Propose GF stores")
+    store_parser = sp.add_parser("stores", help="propose Green's function stores")
     store_parser.add_argument(
         "projects", help='default "all available"', nargs="*", default="."
     )
@@ -613,7 +598,7 @@ if __name__ == "__main__":
     )
     store_parser.add_argument("--station", help="(Rather for standalone use. Optional)")
 
-    process_parser = sp.add_parser("process", help="Create images")
+    process_parser = sp.add_parser("process", help="run analysis")
     process_parser.add_argument(
         "projects", help='default "all available"', nargs="*", default="."
     )
@@ -725,12 +710,12 @@ if __name__ == "__main__":
         required=False,
     )
 
-    snuffle_parser = sp.add_parser("snuffle", help="Scrutinize waveforms")
+    snuffle_parser = sp.add_parser("snuffle", help="check waveforms")
     snuffle_parser.add_argument(
         "projects", help='default "all available"', nargs="*", default="."
     )
 
-    map_parser = sp.add_parser("map", help="Create map")
+    map_parser = sp.add_parser("map", help="create map")
     map_parser.add_argument(
         "--topography",
         dest="show_topo",
@@ -741,9 +726,7 @@ if __name__ == "__main__":
     )
 
     bounds_parser = sp.add_parser(
-        "bounds",
-        help="Get bounds of array vs catalog of events. "
-        "Helpful when generating stores for entire catalogs.",
+        "bounds", help="get distance and depth ranges for Green's function preparation"
     )
     bounds_parser.add_argument("--events", help="events filename", required=True)
     bounds_parser.add_argument("--array-id", dest="array_id", required=True)
@@ -781,4 +764,4 @@ if __name__ == "__main__":
             parser.print_help()
 
     except CannotCreate as e:
-        logger.error("%s. Run with --force to overwrite existing data." % e)
+        fail("%s Run with --force to overwrite existing data." % e)
