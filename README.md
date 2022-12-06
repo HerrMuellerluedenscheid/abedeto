@@ -107,11 +107,9 @@ Most likely, you want to run the commands
     fomosto ttt         # Interpolate travel time tables
     fomosto build       # Start generating data bases
 
----
 **Note:** Handling ``number of layers (lmax) defined too small``
 
 Especially at large distances, the ray's turning point can be deep resulting in an earth-model (see store's config file) of great depth. In this case `QSeis` will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you `QSeis`' installation's `qsglobal.h`, recompile and try again.
----
 
 ### Project structure
 
