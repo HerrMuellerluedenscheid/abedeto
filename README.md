@@ -1,29 +1,64 @@
-## Array Beam Depth Tool
+# Abedeto: Array Beam Depth Tool
 
-### Prerequisites:
+TODO: add abstract
+
+## Prerequisites:
 
 * [Pyrocko](https://pyrocko.org/)
 
-If you don't have appropriate Green's function databases you also need to install the
-modelling codes as described in the [Fomosto tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html) in the
-[Creating a new Green's function store](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html#creating-a-new-green-s-function-store) paragraph.
+Abedeto calculates synthetic seismograms with the help of
+[Pyrocko-GF](https://pyrocko.org/docs/current/topics/pyrocko-gf.html). It is
+required to have an appropriate Green's function computation modelling code
+installed, i.e. QSEIS or QSSP from [Fomosto
+backends](https://pyrocko.org/docs/current/apps/fomosto/backends.html). See
+also the [Fomosto
+tutorial](https://pyrocko.org/docs/current/apps/fomosto/tutorial.html) for
+further information about how to calculate Green's functions for use with
+Pyrocko-GF.
 
-### Download and Installation
+## Download and installation
 
     git clone https://github.com/HerrMuellerluedenscheid/abedeto.git
     cd abedeto
     pip install --no-deps .
 
-### Processing
-In general: If you need help add a ``--help`` to the command call in order to get additional information.
+## Usage
+
+Abedeto is a command line tool. Run `abedeto` without any arguments to get an
+overview of the available subcommands. Add `--help` to get further information
+about any of the subcommands, e.g. `abedeto init --help`.
+
+## Tutorial
+
+### Overview
+
+TODO: describe overview
+
+TODO: add figure
+
+
+### Initialization and getting seismic waveforms
+
+TODO: introduce 'project' concept
 
 Initialize a project:
 
     abedeto init <catalog>
 
-where `<catalog>` is a [Pyrocko](https://pyrocko.org) compatible `<catalog>` of one or several events. Have a look at the
-[Iquique example](https://github.com/HerrMuellerluedenscheid/abedeto/blob/master/examples/iquique_example.pf) to see an example of such a file.
-This will create project folders for each event within the catalog.
+where `<catalog>` is in [Pyrocko compatible
+format](https://pyrocko.org/docs/current/formats/basic_event.html), containing
+one or several events. This will create project folders for each event within
+the catalog.
+
+TODO: move to initialization section:
+
+Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
+
+    abedeto init catalog.pf --name
+
+In order to avoid ambiguity between projects this works only when one event is present in the given file.
+By default, existing directories will not be overwritten unless appending ``--force`` to the command.
+
 Change into one of the created project directories and run
 
     abedeto download
@@ -44,6 +79,10 @@ With
 
 you can scrutinize waveforms, beams and make use of many other features provided by [Snuffler](https://pyrocko.org/docs/current/apps/snuffler/index.html).
 
+### Generating suitable Green's functions
+
+TODO: explain concept (why use Green's functions)
+
 Also, *abedeto* can propose suitable Green's function stores based on [Crust2.0](http://igppweb.ucsd.edu/~gabi/crust2.html) profiles:
 
     abedeto stores
@@ -54,8 +93,8 @@ Set the depth range to test by appending
 
 to the previous command. Values are to be given in kilometers. Default is ``0:15:1``
 km.
-The proposed stores' config files contain a source and a receiver site model. These are 
-combinations of the crust2 models at the top and beneath the AK135 model. 
+The proposed stores' config files contain a source and a receiver site model. These are
+combinations of the crust2 models at the top and beneath the AK135 model.
 You can modify those models as you please.
 *abedeto* will set some parameters depending on the penetration depth of the
 defined phase. E.g. it will remove everything beneath the turning point of the P ray
@@ -68,14 +107,51 @@ Most likely, you want to run the commands
     fomosto ttt         # Interpolate travel time tables
     fomosto build       # Start generating data bases
 
-Having finished this, run
+---
+**Note:** Handling ``number of layers (lmax) defined too small``
+
+Especially at large distances, the ray's turning point can be deep resulting in an earth-model (see store's config file) of great depth. In this case `QSeis` will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you `QSeis`' installation's `qsglobal.h`, recompile and try again.
+---
+
+### Project structure
+
+The hierarchy within the project directory looks as follows::
+
+    ProjectDir/				# Project directory
+        |--array_data
+           |--"SOME_ID1"		# Some Array ID
+           |--"SOME_ID2"
+               |--array_center.pf	# Array center location used for beam forming
+               |--beam.mseed		# Beam
+               |--stations.pf		# Station meta information
+               |--traces.mseed		# Raw traces
+           :
+           :
+
+        |--event.pf			# Event file
+        |--store-mapping		# Maps store ids to array ids
+        |--request.yaml			# Information concerning data selection
+        |--stores
+           |--StoreID1			# Green's function stores
+           |--StoreID2			# The name combines the array ID and
+           :				# the ID of the Crust2x2 tile at the
+           :				# source and receiver site
+
+### Running the analysis
+
+TODO: repeat very briefly concept
+
+The analysis will be performed by running
 
     abedeto process [options]
 
+TODO: Several options control ... explain one by one
+
 to generate figures which might help to judge about the depth of the event. They are created within the project directory in PNG format.
+
 Given that you restituted the traces when creating the beams, you have to define ``--quantity=restituted``. This is not done automatically, yet.
 
-### Further Information on Applications
+
 You can specify the array-id you are going to process using e.g. ``--array-id=GERES``.
 
 Change the y-position of the beam (blue traces) using e.g. ``--depth=1.6``. This will plot the beam at the y-axis intercept coinciding with a depth of 1.6 km.
@@ -96,49 +172,29 @@ Currently, no restitution is performed. However, the quantity can be changed usi
 
 Some rudimentary information can be added as a caption to the figure by settings the ``--auto-caption`` flag.
 
-Running the init command on events where the *name* is not specified will fail. In this case a name needs to be specified, manually:
-
-    abedeto init catalog.pf --name
-
-In order to avoid ambiguity between projects this works only when one event is present in the given file.
-By default, existing directories will not be overwritten unless appending ``--force`` to the command.
-
 For quicker feedback ``--show`` will visualize all results right away.
 
 Finally, the complete line to produce a meaningfull image might look like:
 
-    abedeto process --array-id AliceSprings --depth 0.2 --depths=0.2:12:0.2 --quantity displacement --filter 0.9:9 --gain 3. --out-filename="%(array-id)s_%(quantity)s" --correction=0.4 --zoom=-2:12 --title="%(array-id)s" --show --auto-caption 
+    abedeto process --array-id AliceSprings --depth 0.2 --depths=0.2:12:0.2 --quantity displacement --filter 0.9:9 --gain 3. --out-filename="%(array-id)s_%(quantity)s" --correction=0.4 --zoom=-2:12 --title="%(array-id)s" --show --auto-caption
 
-### General Information
+TODO: add final figure
 
-The hierarchy within the directory looks as follows::
+## Support
 
-    ProjectDir/				# Project directory
-        |--array_data
-           |--"SOME_ID1"		# Some Array ID
-           |--"SOME_ID2"
-               |--array_center.pf	# Array center location used for beam forming
-               |--beam.mseed		# Beam
-               |--stations.pf		# Station meta information
-               |--traces.mseed		# Raw traces
-           :
-           :
+Community support available in the [Abedeto channel on the Pyrocko Hive](https://hive.pyrocko.org/pyrocko-support/channels/abedeto).
 
-        |--event.pf			# Event file
-        |--store-mapping		# Maps store ids to array ids
-        |--request.yaml			# Information concerning data selection
-        |--stores
-           |--StoreID1			# Green's function stores
-           |--StoreID2			# The name combines the array ID and 
-           :				# the ID of the Crust2x2 tile at the
-           :				# source and receiver site
+## Citation
 
+### Citation of seismic data used in analysis
 
-### Notes on building stores
-#### Handling ``number of layers (lmax) defined too small``
-
-Especially at large distances, the ray's turning point can be deep resulting in an earth-model (see store's config file) of great depth. In this case `QSeis` will fail with the exception mentioned above. In this case you can increase the parameter ``lmax`` in you `QSeis`' installation's `qsglobal.h`, recompile and try again.
-
-### Citation of data
-I recommend having a look at the [IRIS Citations](http://www.iris.edu/hq/iris_citations) 
+I recommend having a look at the [IRIS Citations](http://www.iris.edu/hq/iris_citations)
 and [FDSN Citations](http://www.fdsn.org/citations/) section for acknowledgement.
+
+## Citing Abedeto
+
+TODO: how should abedeto be cited / paper? doi?
+
+## License
+
+## Contact
