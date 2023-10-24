@@ -106,7 +106,7 @@ def propose_stores(
     :param force_overwrite: overwrite potentially existent store
     :param run_ttt: generate travel time tables right away"""
 
-    modelling_code_id = "qseis.2006a"
+    modelling_code_id = "qseis.2006b"
 
     configs = []
     if classic:
